@@ -1,0 +1,41 @@
+PISOLE PROJECT
+
+The PiSole project is supposed to be a sort of follow up project to the JTShell
+project, that is because while the JTShell, especially in its second
+developement iteration JTSv2, turned out to be working properly as a useful 
+program there are still a few problems asociated with its base structure:
+- During the ongoing developement process of the JTShell project it is hard
+  to in terms of starting it up, because its is not yet compressed to be a
+  single executable, instead many python modules have to be started in a quite
+  complicated manner of gettiong them to work with kivy
+- While the system of background and foreground processes and the centrel shell
+  server instance might be one of the best choices when it comes to a operating
+  level, those design ideas or features are way too complicated when it comes to
+  more simpler applications, that are not necessarily connected to this system
+  
+The goal of this new project would be to create a simple loibrary for all sorts
+of other projects, that is implemented easily into already existing features.
+Basically a sort of Terminal Ui or Widget, that only has to be imported to work
+on its own and has its own specific commands, only connected to the Python
+instnace and source code of that very project it is being utilized in.
+
+How it supposed to be in the end:
+In the end it is supposed to be a single Python package one puts into the main
+folder of another project and be able to use it by only importing various
+features. Commands However will still have to be defined in a sepearte module, 
+but because all functions, thata are supposed to be working as commands later on
+can be written into a single file, instead of each haveing its individual module
+there is no need for a translate process at all.
+
+Coding wise the new project is actually not so much a an entirely new project,
+but more of a slight alteration of the already existing structeres of JTShell:
+- The console widget can basically be copied 1 to 1
+- There is not need for a translation system
+-> The Translation system will be replaced by a few interfacing functions to
+   direct the strungs between the input and output of the widget
+That is literally all there is to do
+
+The main concern of the project will not so much be the coding, but its state 
+however. Unlike the JTShell project this one has to be pretty polkished all
+along before terminating one versions developement cycle, as it is supposed to
+be a reliable tool for building further projects.

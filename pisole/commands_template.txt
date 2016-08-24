@@ -1,0 +1,8 @@
+def func(console, parameter):
+    # for info
+    console.print_info("Info")
+    # for errors
+    console.print_error(Exception)
+    # for results
+    console.print_result("Fertig")
+    return True
