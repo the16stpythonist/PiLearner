@@ -7,7 +7,43 @@ from commands import *
 import pisole.translate as translate
 import pisole.message as message
 import threading
+import commands
+import inspect
 import time
+
+
+def help(console, command=""):
+    """
+    A function that will provide the user with information about the available commands. prints the list of all commands
+    on default and the specific documentation of the command, when passed a name of func object
+    :param console: -
+    :param command: (string) (func) the command to be helped about
+    :return:
+    """
+    # the functions list will contain tuples (function_name, function)
+    functions_list = inspect.getmembers(commands, inspect.isfunction)
+
+    # in case the string is empty the help function will print a list of all available commands
+    if command == "":
+        print_string_list = ["The following commands are available\n\n"]
+        for function in functions_list:
+            print_string_list.extend([function[0], "\n"])
+        console.print_info(''.join(print_string_list))
+
+    else:
+        functions_dict = {}
+        for function in functions_list:
+            functions_dict[function[0]] = function[1]
+        if command in functions_dict.keys():
+            print_string_list = ["\n\n", command, "\n\n"]
+            print_string_list.append(str(inspect.getdoc(functions_dict[command])))
+            console.print_info(''.join(print_string_list))
+        elif inspect.isfunction(command):
+            print_string_list = ["\n\n", str(command.__name__), "\n\n"]
+            print_string_list.append(str(inspect.getdoc(command)))
+            console.print_info(''.join(print_string_list))
+        else:
+            raise NotImplementedError("the command '{}' does not exist".format(command))
 
 
 class SimplePisoleConsole(threading.Thread):
