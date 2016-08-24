@@ -65,6 +65,100 @@ def load_exercise(subject, subsubject, name):
     return Exercise(name, max_points, content, answer, average_points, last_used, use_frequency, exercise_path)
 
 
+class ExerciseHistory:
+    """
+    The ExerciseHistory objects are basically dictionary style sequnces, that contain the record of all past uses of
+    one exercise. The internal dictionary assigns every achieved points (value) to the datetime it was solved (key).
+    The Objects wrap the functionality of easily adding entries, creating subsequnces based on time intervals and
+    the calculation of the average points.
+    :ivar dict: (dict) the internal dictionary actually containing the data
+    """
+
+    def __init__(self):
+        # The dictionary in which the data will be stored, with the date of use being the date time and the item being
+        # the amount of points achieved that day
+        self.dict = {}
+
+    def add(self, datetime_timestamp, points):
+        """
+        adds a new entry to the sequence
+        :param datetime_timestamp: (int) the timestamp from the date_time object
+        :param points: (float) the amount of points reached
+        :return: (void)
+        """
+        # adding the new entry to the dictionary
+        self.dict[datetime_timestamp] = points
+
+    def get_dictionary(self):
+        """
+        :return: (dict) the internal dictionary
+        """
+        return self.dict
+
+    def get_average_points(self, start=None, stop=None):
+        """
+        Calculates the average points of the exercise within the given index span. On default uses all entries
+        :param start: (int) the start index, by normal python slicing convention
+        :param stop: (int) the end index, by normal python slicing convention
+        :return: (float) the average amount of points within the range
+        """
+        point_list = list(self.dict.values())
+        # slicing the list, in case indexes were passed
+        if stop is not None:
+            point_list = point_list[:stop]
+        if start is not None:
+            point_list = point_list[start:]
+        # calculating the total amount of points and then dividing it by the amount by the amount of entries
+        total_points = 0
+        for points in point_list:
+            total_points += points
+        return float(total_points / len(point_list))
+
+    def get_interval(self, datetime_timestamp_start, datetime_timestamp_end):
+        """
+        creates a new ExerciseHistory object from the existing one, only containing the entries from within the
+        specified time interval
+        :param datetime_timestamp_start: (float) the datetime.timestamp of the time the interval starts
+        :param datetime_timestamp_end: (float) the datetime.timestamp of the time the interval ends
+        :return: (ExerciseHistory) the new sliced interval of the History
+        """
+        date_list = list(self.dict.keys())
+        new_history = ExerciseHistory()
+        for date in date_list:
+            # only adding those entries, whose timestamps are bigger than the minimum and smaller than the max
+            if date >= datetime_timestamp_start and date <= datetime_timestamp_end:
+                new_history.add(date, self.dict[date])
+        return new_history
+
+    def keys(self):
+        return list(self.dict.keys())
+
+    def values(self):
+        return list(self.dict.values())
+
+    def __contains__(self, item):
+        """
+        When using the 'y in x' syntax on this object it will check whether the key exists, rather than the item, since
+        one would rather want to know if the exercise was done on a given date
+        :param item:
+        :return:
+        """
+        return item in self.keys()
+
+    def __iter__(self):
+        return self.dict.__iter__()
+
+    def __getitem__(self, item):
+        if item in self.keys():
+            return self.dict[item]
+
+    def __setitem__(self, key, value):
+        self.dict[key] = value
+
+    def __len__(self):
+        return len(self.dict)
+
+
 class Exercise:
     """
     The Exercise class is mainly designated to encapsulate the information and attributes an exercise is meant to
@@ -85,8 +179,9 @@ class Exercise:
     :ivar content: (string) The string containing the actual content of the exercise, written in LaTeX
 
     :ivar average_points: (float) The statistical average amount of achieved points throughout all uses
-    :ivar last_use: (float) The last time the exercise was used in an exam. time.time() format
     :ivar use_frequency: (int) The total amount of all uses throughout all exams
+    :ivar history: (ExerciseHistory) the object containing the history of the exercise, meaning a list of all past
+    solves and achieved points of the exercise
     """
     def __init__(self, name, max_points, content, answer, average_points, last_use, use_frequency, path):
         # Setting the identifying name odf the excercise object
@@ -107,6 +202,9 @@ class Exercise:
         # The Path in which the file is being stored
         self._path = path
 
+        # creates the history object of the exercise
+        self.history = self._load_history(self._path)
+
     def solve(self, points):
         """
         This method is meant to be called at the point one has already finished the generated exam and is entering the
@@ -114,12 +212,8 @@ class Exercise:
         the exercise, once the amount of achieved points was passed.
         WORKING PRINCIPLE:
         Aside from simply calling the time.time() function as the last time of use and incrementing the total amount of
-        uses, this method will also update the average points. Since the program doesn't keep track of all
-        individual result though (Which would make an easy calculation of the average points with:
-        summ_of_all_points / total_amount_of_uses) a sort of mathematical approach was chosen:
-        When n is is the total amount of uses, a is the average amount of points and p is the current points, the
-        average can be calculated by:
-            a_new = (n/(n+1)) * a_old + (1/(n+1)) * p
+        uses, this method will also update the average points. The average amount of points is calculated by the
+        history of the exercise, the object, that contains the record of all previous uses of the exercise.
         :param points: (int) The achieved amount of points for the exercise, when solving the exam
         :return: (void)
         """
@@ -127,9 +221,10 @@ class Exercise:
         self.points = points
         # Incrementing the total amount of all times the exercise has been used
         self.use_frequency += 1
-        # updating the average points
-        self.average_points = ((self.use_frequency/(self.use_frequency + 1)) * self.average_points +
-                               (1/(self.use_frequency + 1)) * self.points)
+        # adding the most recent solve to the history
+        self.history.add(datetime.datetime.today().timestamp(), points)
+        # updating the average points by using the history of the exercise
+        self.average_points = self.history.get_average_points()
 
     def save(self):
         """
@@ -152,7 +247,34 @@ class Exercise:
                           "last_use": self.last_use}
         # replacing the old specs with the updated Statistic and writing to the file
         config["STATISTIC"] = statistic_dict
+        config["HISTORY"] = self.history.get_dictionary()
         config.write(open(config_path, mode="w"))
+
+    @staticmethod
+    def _load_history(exercise_path):
+        """
+        Creates a ExerciseHistory object for the history, when passed the path to the according root folder of the
+        exercise
+        :param exercise_path: (string) the path to the root folder of the exercise
+        :return: (ExerciseHistory) the exercise history of the exercise, whose root path was passed
+        """
+        # creating the history object and the config parser to read the history from the file
+        history = ExerciseHistory()
+        config = configparser.ConfigParser()
+        config_path = "{}\\config.ini".format(exercise_path)
+        config.read(config_path)
+
+        # checking whether the exercise config even has a history creating one in case it hasn't
+        if "HISTORY" not in config.keys():
+            config.add_section("HISTORY")
+            with open(config_path, mode="w") as file:
+                config.write(file)
+            return history
+
+        # adding the entries of the 'History' dict to the history object one by one
+        for key in dict(config["HISTORY"]).keys():
+            history.add(float(key), float(config["HISTORY"][key]))
+        return history
 
 
 class ExerciseList:

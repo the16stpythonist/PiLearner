@@ -1,11 +1,14 @@
 import PiLearner.exercise as exercise
 import PiLearner.exam as exam
+import configparser
 import inspect
 import shutil
 import time
 import os
 
-project_directory = os.path.dirname(os.path.abspath(inspect.stack()[0][1]))
+config_parser = configparser.ConfigParser()
+config_parser.read("config.ini")
+project_directory = config_parser["Paths"]["project_dir"]
 
 
 def echo(console, string):
