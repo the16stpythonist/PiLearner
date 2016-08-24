@@ -11,7 +11,46 @@ import os
 # Dynamic assignment of the project path on a module level, as this will grant a few more possibilities, when moving
 # the project within te file structure. ONe could also think about dynamically and temporaryly adding the path to the
 # PYTHONPATH before main execution, so this would have to be a dependency of the project
-PROJECT_PATH = os.path.dirname(os.path.abspath(inspect.stack()[0][1]))
+config = configparser.ConfigParser()
+config.read("config.ini")
+PROJECT_PATH = config["Paths"]["project_dir"]
+
+
+def reset_exercise_progress(subject, subsubject, name):
+    """
+    resets the progress of the specified exercise, that means deleting the history and resetting the statistical info
+    :param subject: (string) The subject of the exercise
+    :param subsubject: (string) The subsubject of the exercise
+    :param name: (string) The name of the Exercise
+    :return: (void)
+    """
+    # checking whether the given path exists
+    subject_path = "{0}\\subjects\\{1}".format(PROJECT_PATH, subject)
+    if not os.path.exists(subject_path):
+        raise NotADirectoryError("The subject {0} with the path '{1}' does not exist".format(subject, subject_path))
+    subsubject_path = "{0}\\{1}".format(subject_path, subsubject)
+    if not os.path.exists(subsubject_path):
+        raise NotADirectoryError("The subsubject {0} with the given path {1} does not exist".format(subsubject,
+                                                                                                    subsubject_path))
+    exercise_path = "{0}\\{1}".format(subsubject_path, name)
+    if not os.path.exists(exercise_path):
+        raise NotADirectoryError("The exercise {0} with the given path {1} does not exist".format(name, exercise_path))
+
+    # loading config file
+    config = configparser.ConfigParser()
+    config_path = "{0}\\config.ini".format(exercise_path)
+    config.read(config_path)
+
+    # resetting the statistical info
+    for statistic_info in dict(config["STATISTIC"]).keys():
+        config["STATISTIC"][statistic_info] = 0
+
+    # deleting the history
+    config["HISTORY"] = {}
+
+    # saving the changed config
+    with open(config_path, mode="w") as file:
+        config.write(file)
 
 
 def load_exercise(subject, subsubject, name):
@@ -87,13 +126,12 @@ class ExerciseHistory:
         :return: (void)
         """
         # adding the new entry to the dictionary
-        self.dict[datetime_timestamp] = points
+        self.dict[str(datetime_timestamp)] = str(points)
 
     def get_dictionary(self):
         """
         :return: (dict) the internal dictionary
         """
-        return self.dict
 
     def get_average_points(self, start=None, stop=None):
         """
@@ -248,6 +286,7 @@ class Exercise:
         # replacing the old specs with the updated Statistic and writing to the file
         config["STATISTIC"] = statistic_dict
         config["HISTORY"] = self.history.get_dictionary()
+        config["INFO"]["name"] = self.name
         config.write(open(config_path, mode="w"))
 
     @staticmethod
