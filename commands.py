@@ -26,9 +26,12 @@ def reset_progress(console, subject="", subsubject="", exercise=""):
         # asking for a security question, since it could be fatal deleting all progress by accident
         is_valid = False
         while not is_valid:
-            answer = str(console.prompt_input("Security Question. Name of this project:"))
+            answer = str(console.prompt_input("Security Question. Name of this project: (or stop)"))
             if answer.upper() == "PILEARNER":
                 is_valid = True
+            elif answer.upper() == "STOP":
+                console.print_error(KeyboardInterrupt("progress reset stopped!"))
+                return 0
 
     # assembling the path from which everything has to be reset
     path_string_list = [project_directory, "\\subjects"]
@@ -105,43 +108,42 @@ def create_exam(console, subject, subsubject, max_points, dest_path=""):
     return True
 
 
-def main(console, subject, subsubject):
+def solve_exam(console, subject, subsubject):
     """
-
-    :param console:
-    :param subject:
-    :param subsubject:
+    solves the exam specified by the parameters
+    :param console: -
+    :param subject: (string) the subject
+    :param subsubject: (string) the subsubject
     :return: (int) the amount of achieved points
     """
     console.print_info("Attempting to solve the open session for '{0} - {1}'".format(subject, subsubject))
     session_file_path = "{0}\\exams\\{1} - {2}.session".format(exercise.PROJECT_PATH, subject, subsubject)
+    # creating the path, that leads to the session file of the according subject, no matter it existing or not
+    session_path = exam.get_session_path(subject, subsubject)
 
-    # checking whether there actually exists an open session for the given subject
-    if os.path.exists(session_file_path):
-        console.print_info("The open session file '{0}' was found!".format(session_file_path))
-        # reading the contents of the session file
-        with open(session_file_path, mode="r") as file:
-            session_file_content = file.read()
-        # splitting it into the list of names of used exercises
-        exercise_name_list = session_file_content.split("\n")
-        # removing empty lines
-        while "" in exercise_name_list:
-            exercise_name_list.remove("")
-        # laoding each exercise object into memeory and calling the solve method to add a new solved point to the set
+    # checking whether there actually exists an open session for the specified subject
+    if exam.session_exists(subject, subsubject):
+        console.print_info("Session for '{}' exists".format(session_path))
+        # reading the session file, getting a list of the names of all used exercises
+        exercise_name_list = exam.get_session_content(subject, subsubject)
+        # creating a exam object from the session file
+        session_exam = exam.exam_from_session(subject, subsubject)
+        # itering through the list of exercise names
         for exercise_name in exercise_name_list:
-            exercise_obj = exercise.load_exercise(subject, subsubject, exercise_name)
+            exercise_obj = session_exam.exercise_list[exercise_name]
+            # prompting the user to enter the amount of reached points
             points = ""
-            # prompting for user input
             while not isinstance(points, int):
                 try:
-                    points = int(console.prompt_input("The exercise '{0}' has {1} max points. How many did you achieve?".format(exercise_name, exercise_obj.max_points)))
-                except:
+                    points = int(console.prompt_input(
+                        "The exercise '{0}' has {1} max points. How many did you achieve?".format(exercise_name,
+                                                                                                  exercise_obj.max_points)))
+                except ValueError:
                     console.print_info("That is no valid integer! Try again...")
-            exercise_obj.solve(points)
-            console.print_info("The exercise has been solved with {0} points and now it has {1} points on average on a total of {2} uses".format(points, exercise_obj.average_points, exercise_obj.use_frequency))
-            exercise_obj.save()
+            # solving and saving the exercise
+            session_exam.save_exercise(exercise_name, points)
         console.print_info("Deleting the session file")
         os.remove(session_file_path)
         console.print_result("The pending exam '{0} - {1}' has been solved!".format(subject, subsubject))
     else:
-        console.print_error(FileNotFoundError("There exists no open session for the given subjects!"))
+        raise FileNotFoundError("There exists no open session for the given subjects!")

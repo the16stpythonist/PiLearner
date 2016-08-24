@@ -132,6 +132,7 @@ class ExerciseHistory:
         """
         :return: (dict) the internal dictionary
         """
+        return self.dict
 
     def get_average_points(self, start=None, stop=None):
         """
@@ -149,7 +150,7 @@ class ExerciseHistory:
         # calculating the total amount of points and then dividing it by the amount by the amount of entries
         total_points = 0
         for points in point_list:
-            total_points += points
+            total_points += int(points)
         return float(total_points / len(point_list))
 
     def get_interval(self, datetime_timestamp_start, datetime_timestamp_end):
@@ -440,3 +441,17 @@ class ExerciseList:
 
     def __iter__(self):
         return self.list.__iter__()
+
+    def __getitem__(self, exercise_name):
+        """
+        returns the exercise object with the given name.
+        Since the object is not based upon a dictionary, but a list, the method will loop through the list until it
+        finds the exercise with the given name, vanilla style. Raises a key error in case there is no exercise with
+        the given name
+        :param exercise_name: (string) the name of the exercise, whose object should be returned
+        :return: (Exercise) the exercise with the given name
+        """
+        for exercise in self.list:
+            if exercise.name == exercise_name:
+                return exercise
+        raise KeyError("There is no exercise by the name '{}' in the list".format(exercise_name))

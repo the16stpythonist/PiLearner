@@ -2,6 +2,7 @@ __author__ = "Jonas Teufel"
 __version__ = "0.0.0"
 
 import PiLearner.exercise as exercise
+import configparser
 import time
 import os
 
@@ -105,6 +106,97 @@ def generate_pdf(exam_obj):
     os.system("pdflatex -interaction nonstopmode {0}".format(tex_file_path))
 
 
+def get_session_path(subject, subsubject):
+    """
+    returns the path of the session file of the given subject. This will only assemble a string and does not say, that
+    the file actually exists
+    :param subject: (string) the subject of the exam
+    :param subsubject: (string) the subsubject of the exam
+    :return: (string) the path of the session file to the specified subject
+    """
+    # assembling the path of the session file to the specified subject
+    session_name = "{} - {}.session".format(subject, subsubject)
+    session_path = "{}\\exams\\{}".format(exercise.PROJECT_PATH, session_name)
+    return session_path
+
+
+def session_exists(subject, subsubject):
+    """
+    checks and returns whether there exists a open session to the specified subject
+    :param subject: (string) the subject of the exam to check
+    :param subsubject: (string) the subsubject of the exam to check
+    :return: (bool) whether the session exists or not
+    """
+    # simply checking for the existence of the session file
+    return os.path.exists(get_session_path(subject, subsubject))
+
+
+def get_session_content(subject="", subsubject="", sessionfile_path=""):
+    """
+    returns the contents of the session file specified in the form of a list, containing the names of all exercises,
+    that were used in the session
+    :param subject: (string) the subject of the exam
+    :param subsubject: (string) the subsubject of the exam
+    :return: (list) the list of all exercise names used in session
+    """
+    if sessionfile_path == "":
+        # creating the actual path of the session file, in case the path was not specified
+        session_path = get_session_path(subject, subsubject)
+    else:
+        if os.path.exists(sessionfile_path) and ".session" in sessionfile_path:
+            session_path = sessionfile_path
+        else:
+            raise FileNotFoundError("Session content couldnt be read, file '{}' no session".format(sessionfile_path))
+    # opening the session file and reading its content
+    session_lines_list = []
+    with open(session_path, mode="r") as file:
+        session_lines_list = file.read().split("\n")
+
+    # getting rid of the new line characters in the line list, so that only the actual content lines sty in it
+    while "" in session_lines_list:
+        session_lines_list.remove("")
+
+    return session_lines_list
+
+
+def exam_from_session(subject="", subsubject="", sessionfile_path=""):
+    """
+    creates and returns an Exam object instance, that was build with all the exercises from the session file specified.
+    The session file can be specified by passing either:
+    - the subject and the subsubject, so the function will search for a according session file
+    - straight up the path of the session file
+    :param subject: (string) the subject of the exam
+    :param subsubject: (string) the subsubject of the exam
+    :param sessionfile_path: (string) the path to an specific session file
+    :return: (Exam) the exam object, representing the open session
+    """
+    # acquiring the session content
+    exercise_names_list = []
+    subject_name = subject
+    subsubject_name = subsubject
+    if sessionfile_path == "":
+        exercise_names_list = get_session_content(subject=subject, subsubject=subsubject)
+    else:
+        exercise_names_list = get_session_content(sessionfile_path=sessionfile_path)
+        # getting the subject and subsubject from the file path, since they are important and probably weren't
+        # passed as parameters, when the path already was.
+        # Session file naming convention: "subject - subsubject.session"
+        sessionfile_name_split = os.path.basename(sessionfile_path).replace(".session", "").replace(" ", "").split("-")
+        subject_name = sessionfile_name_split[0]
+        subsubject_name = sessionfile_name_split[1]
+
+    # building a list with exercises from the names
+    exercise_list = exercise.ExerciseList()
+    for exercise_name in exercise_names_list:
+        exercise_list.append(exercise.load_exercise(subject_name, subsubject_name, exercise_name))
+
+    # building the exam object with the list of exercise objects
+    exam = Exam(exercise_list=exercise_list)
+
+    return exam
+
+
+# TODO: update doc string
 class Exam:
     """
     The class that represents the Exam. The Exam consists of information about the subject and its subsubject, the
@@ -117,18 +209,26 @@ class Exam:
     :ivar subsubject: (string) the more specific subcatagory of the specified subject, the xam is about
     :ivar max_points: (int)  The maximum amount of points, that is achievable with this exam
     """
-    def __init__(self, subject, subsubject, max_points=20):
+    def __init__(self, subject="", subsubject="", max_points=20, exercise_list=[]):
         self.subject = subject
         self.subsubject = subsubject
         self.max_points = max_points
         self.creation_date = time.time()
 
         # loading the list of exercises
-        exercise_name_list = os.listdir("{0}\\subjects\\{1}\\{2}".format(exercise.PROJECT_PATH, subject, subsubject))
-        exercise_object_list = []
-        for exercise_name in exercise_name_list:
-            exercise_object_list.append(exercise.load_exercise(subject, subsubject, exercise_name))
-        self.exercise_list = exercise.ExerciseList(exercise_object_list)
+        if len(exercise_list) == 0:
+            exercise_name_list = os.listdir("{0}\\subjects\\{1}\\{2}".format(exercise.PROJECT_PATH, subject,
+                                                                             subsubject))
+            exercise_object_list = []
+            for exercise_name in exercise_name_list:
+                exercise_object_list.append(exercise.load_exercise(subject, subsubject, exercise_name))
+            self.exercise_list = exercise.ExerciseList(exercise_object_list)
+
+        else:
+            if isinstance(exercise_list, exercise.ExerciseList):
+                self.exercise_list = exercise_list
+            else:
+                raise TypeError("The passed list doesnt contain Exercise objects")
 
         # the content string, holding the actual exam as a latex string
         self.content = r""
@@ -175,8 +275,32 @@ class Exam:
         # converting the list of string into a single string
         self.content = ''.join(content_string_list)
 
+    def save_exercise(self, exercise_name, points):
+        """
+        solves the exercise with the specified name and passed amount of points and then saves the changes to the
+        filesystem persistantly, by calling the save method of each exercise.
+        :param exercise_name: (string) the name of the exercise to solve and save
+        :param points: (int) the amount of points achieved
+        :return: (void)
+        """
+        exer = self.exercise_list[exercise_name]
+        exer.solve(points)
+        exer.save()
+
     def get_content(self):
         return self.content
 
     def get_exercise_paths_list(self):
         return self.exercise_list.get_paths_list()
+
+
+class SubjectHistory(exercise.ExerciseHistory):
+
+    def __init__(self):
+        super(SubjectHistory, self).__init__()
+
+
+class SubjectProgress:
+
+    def __init__(self):
+        pass
