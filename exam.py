@@ -3,6 +3,7 @@ __version__ = "0.0.0"
 
 import PiLearner.exercise as exercise
 import configparser
+import datetime
 import time
 import os
 
@@ -191,9 +192,61 @@ def exam_from_session(subject="", subsubject="", sessionfile_path=""):
         exercise_list.append(exercise.load_exercise(subject_name, subsubject_name, exercise_name))
 
     # building the exam object with the list of exercise objects
-    exam = Exam(exercise_list=exercise_list)
+    exam = Exam(subject=subject_name, subsubject=subsubject_name, exercise_list=exercise_list)
 
     return exam
+
+
+def load_subject_history(subject, subsubject):
+    """
+    creates a SubjectHistory object, that represents the history of all past uses and exams of the subject of the
+    exam specified
+    :param subject: (string) the subject of the exam
+    :param subsubject: (string) the subsubject of the exam
+    :return: (SubjectHistory) the history of the given subject
+    """
+    # loading the config
+    config = configparser.ConfigParser()
+    config_path = "{}\\subjects\\{}\\{}\\config.ini".format(exercise.PROJECT_PATH, subject, subsubject)
+    config.read(config_path)
+    # the new dictionary to be returned
+    history = SubjectHistory()
+    for key in dict(config["HISTORY"]).keys():
+        item_split = config["HISTORY"][key].split(";")
+        item_split = list(map(lambda x: int(x), item_split))
+        history.add(float(key), *item_split)
+    # returning the history object
+    return history
+
+
+def save_history_solved_exam(solved_exam):
+    """
+    Takes an exam object, that is completely solved, and adds its parameters max_points, points and length as a new
+    entry to the history object and then saves it into the config file of the subject persistently
+    :param solved_exam: (Exam) the instance of an Exam, that has been completely solved
+    :return: (boolean) whether the save was successful or not
+    """
+    subject = solved_exam.subject
+    subsubject = solved_exam.subsubject
+    # loading the config
+    config = configparser.ConfigParser()
+    config_path = "{}\\subjects\\{}\\{}\\config.ini".format(exercise.PROJECT_PATH, subject, subsubject)
+    config.read(config_path)
+    # checking whether the exam is actually solved
+    if solved_exam.is_solved():
+        # creating the history object if the exam
+        history = load_subject_history(subject, subsubject)
+        # adding a new entry to the history
+        history.add(datetime.datetime.today().timestamp(), solved_exam.max_points, solved_exam.points,
+                    solved_exam.length)
+        # using the dictionary from the history for the config parser
+        config["HISTORY"] = history.get_config_compatible_dict()
+        # saving the config parser
+        with open(config_path, mode="w") as file:
+            config.write(file)
+        return True
+    else:
+        return False
 
 
 # TODO: update doc string
@@ -209,16 +262,23 @@ class Exam:
     :ivar subsubject: (string) the more specific subcatagory of the specified subject, the xam is about
     :ivar max_points: (int)  The maximum amount of points, that is achievable with this exam
     """
-    def __init__(self, subject="", subsubject="", max_points=20, exercise_list=[]):
+    def __init__(self, subject="", subsubject="", max_points=20, exercise_list=()):
         self.subject = subject
         self.subsubject = subsubject
         self.max_points = max_points
-        self.creation_date = time.time()
+        # the amount of time the user took to complete the exam
+        self.length = 0
+        # the actual amount of points achieved
+        self.points = 0
+        # the exact moment it was created
+        self.creation_date = datetime.datetime.today().timestamp()
 
         # loading the list of exercises
         if len(exercise_list) == 0:
             exercise_name_list = os.listdir("{0}\\subjects\\{1}\\{2}".format(exercise.PROJECT_PATH, subject,
                                                                              subsubject))
+            # excluding the subject config file from the name list
+            exercise_name_list.remove("config.ini")
             exercise_object_list = []
             for exercise_name in exercise_name_list:
                 exercise_object_list.append(exercise.load_exercise(subject, subsubject, exercise_name))
@@ -275,7 +335,7 @@ class Exam:
         # converting the list of string into a single string
         self.content = ''.join(content_string_list)
 
-    def save_exercise(self, exercise_name, points):
+    def solve_exercise(self, exercise_name, points):
         """
         solves the exercise with the specified name and passed amount of points and then saves the changes to the
         filesystem persistantly, by calling the save method of each exercise.
@@ -283,9 +343,31 @@ class Exam:
         :param points: (int) the amount of points achieved
         :return: (void)
         """
+        self.points += points
         exer = self.exercise_list[exercise_name]
         exer.solve(points)
         exer.save()
+
+    def solve_length(self, time_seconds):
+        """
+        solves the amount of time the user took to complete the exam
+        :param time_seconds: (int) the time in seconds
+        :return: (void)
+        """
+        self.length = time_seconds
+
+    def is_solved(self):
+        """
+        returns whether the exam is fully solved, meaning every single exercise being solved and the length of the exam
+        being entered
+        :return: (boolean) the status of the exam
+        """
+        # first checking for all exercises to be solved
+        for exer in self.exercise_list:
+            if not exer.is_solved():
+                return False
+        # second check is whether the length of the exam has been solved
+        return self.length != 0
 
     def get_content(self):
         return self.content
@@ -298,6 +380,32 @@ class SubjectHistory(exercise.ExerciseHistory):
 
     def __init__(self):
         super(SubjectHistory, self).__init__()
+
+    def add(self, datetime_timestamp, max_points, achieved_points, length_seconds):
+        """
+        adds a new entry to the sequence
+        :param datetime_timestamp: (float) the timestamp value, representing the time, the exam was solved
+        :param max_points: (int) the amount of points the exam had
+        :param achieved_points: (int) the amount of points actually achieved
+        :param length_seconds: (int) the amount of time it took the user to complete the exam
+        :return: (void)
+        """
+        self.dict[datetime_timestamp] = [max_points, achieved_points, length_seconds]
+
+    def get_config_compatible_dict(self):
+        """
+        returns a dictionary, that represents the the history object, but is compatible with the configparser module,
+        as both keys and values are strings. The original three item list of the history object containing the items:
+        max_points (m), points (p) and length (l) [m, p, l], will be converted into a single string, where the items
+        are separated by a semicolon 'm;p;l'
+        :return: (dict) the dictionary that can be used as part of the config parser, without further augmenting
+        """
+        config_dict = {}
+        for key in self.keys():
+            item_list = self.dict[key]
+            item_string = "{};{};{}".format(item_list[0], item_list[1], item_list[2])
+            config_dict[key] = item_string
+        return config_dict
 
 
 class SubjectProgress:

@@ -78,6 +78,7 @@ def create_exam(console, subject, subsubject, max_points, dest_path=""):
     try:
         exam.create_exam(subject, subsubject, max_points)
     except Exception as e:
+        raise e
         console.print_error(e)
     # theoretically the creation process is finished. Only cleaning up the left overs now
     console.print_info("Finished creation process")
@@ -141,9 +142,20 @@ def solve_exam(console, subject, subsubject):
                 except ValueError:
                     console.print_info("That is no valid integer! Try again...")
             # solving and saving the exercise
-            session_exam.save_exercise(exercise_name, points)
+            session_exam.solve_exercise(exercise_name, points)
+            console.print_info("solved with {} points".format(points))
         console.print_info("Deleting the session file")
         os.remove(session_file_path)
+        minutes = ""
+        while not isinstance(minutes, int):
+            try:
+                minutes = int(console.prompt_input("How long did the exam take you? (in minutes)"))
+            except ValueError:
+                console.print_info("That is no valid integer! Try again...")
+        # solving the required length of the exam at last. Multiplying by 60 as seconds are required
+        session_exam.solve_length(minutes * 60)
+        # saving the exam as another entry in its subject history
+        exam.save_history_solved_exam(session_exam)
         console.print_result("The pending exam '{0} - {1}' has been solved!".format(subject, subsubject))
     else:
         raise FileNotFoundError("There exists no open session for the given subjects!")

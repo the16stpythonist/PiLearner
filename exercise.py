@@ -150,7 +150,7 @@ class ExerciseHistory:
         # calculating the total amount of points and then dividing it by the amount by the amount of entries
         total_points = 0
         for points in point_list:
-            total_points += int(points)
+            total_points += float(points)
         return float(total_points / len(point_list))
 
     def get_interval(self, datetime_timestamp_start, datetime_timestamp_end):
@@ -289,6 +289,13 @@ class Exercise:
         config["HISTORY"] = self.history.get_dictionary()
         config["INFO"]["name"] = self.name
         config.write(open(config_path, mode="w"))
+
+    def is_solved(self):
+        """
+        returns whether the exercise has been solved or not
+        :return: (boolean) the status of the exercise
+        """
+        return self.solved
 
     @staticmethod
     def _load_history(exercise_path):
