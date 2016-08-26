@@ -406,9 +406,3 @@ class SubjectHistory(exercise.ExerciseHistory):
             item_string = "{};{};{}".format(item_list[0], item_list[1], item_list[2])
             config_dict[key] = item_string
         return config_dict
-
-
-class SubjectProgress:
-
-    def __init__(self):
-        pass

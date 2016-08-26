@@ -165,7 +165,7 @@ class ExerciseHistory:
         new_history = ExerciseHistory()
         for date in date_list:
             # only adding those entries, whose timestamps are bigger than the minimum and smaller than the max
-            if date >= datetime_timestamp_start and date <= datetime_timestamp_end:
+            if float(date) >= datetime_timestamp_start and float(date) <= datetime_timestamp_end:
                 new_history.add(date, self.dict[date])
         return new_history
 
@@ -173,7 +173,7 @@ class ExerciseHistory:
         return list(self.dict.keys())
 
     def values(self):
-        return list(self.dict.values())
+        return list(map(lambda x:int(x), self.dict.values()))
 
     def __contains__(self, item):
         """
@@ -188,8 +188,12 @@ class ExerciseHistory:
         return self.dict.__iter__()
 
     def __getitem__(self, item):
-        if item in self.keys():
-            return self.dict[item]
+        if isinstance(item, str):
+            if item in self.keys():
+                return int(self.dict[item])
+        elif isinstance(item, int):
+            if str(item) in self.keys():
+                return int(self.dict[str(item)])
 
     def __setitem__(self, key, value):
         self.dict[key] = value
