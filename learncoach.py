@@ -1,12 +1,12 @@
 from email.mime.text import MIMEText
 
 import configparser
-import threading
 import datetime
 import exercise
 import smtplib
 import random
 import pickle
+import shutil
 import exam
 import math
 import time
@@ -345,7 +345,7 @@ class LearningCoach:
         # running the main loop all the time, since the Thread is supposed to be a background progress
         while True:
             # since the intervals between the are pretty macroscopic pausing the Thread for 3 hours (10800 seconds)
-            time.sleep(2)
+            time.sleep(1800)
 
             # getting list of all learning process objects
             learning_processes = list_learning_processes()
@@ -356,7 +356,18 @@ class LearningCoach:
                 # sends an email reminder and creates the exam
                 if learning_process.days_until_exam() <= 3 and not learning_process.is_user_reminded():
                     self.send_reminder_email(learning_process)
-                    # learning_process.create_exam()
+                    # creating the exam and moving the files
+                    learning_process.create_exam()
+                    # removing the files, that were also created by the latex converter, but are useless for the user
+                    os.remove("{0}\\{1}.aux".format(exercise.PROJECT_PATH, learning_process.subject))
+                    os.remove("{0}\\{1}.log".format(exercise.PROJECT_PATH, learning_process.subject))
+
+                    full_subject_name = ''.join([learning_process.subject, " - ", learning_process.subsubject])
+                    # moving the file into the exams folder
+                    new_path = "{0}\\exams\\{1}.pdf".format(exercise.PROJECT_PATH, full_subject_name)
+                    shutil.move("{0}\\{1}.pdf".format(exercise.PROJECT_PATH, learning_process.subject),
+                                new_path)
+
                     learning_process.user_reminded = True
 
                 # Updating the progress for every learning process
@@ -395,6 +406,7 @@ class LearningCoach:
 
 
 if __name__ == "__main__":
+    os.chdir(r"C:\Users\Jonas\Desktop\STUDIUM\Projekte\PiLearner")
     learning_process = LearningProcess("Test", "SubTest")
     learning_process.create_schedule()
     save_learning_process(learning_process)
