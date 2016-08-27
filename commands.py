@@ -1,3 +1,4 @@
+import PiLearner.learncoach as learncoach
 import PiLearner.exercise as exercise
 import PiLearner.exam as exam
 import configparser
@@ -107,6 +108,68 @@ def create_exam(console, subject, subsubject, max_points, dest_path=""):
         shutil.copy(new_path, destination_path)
         console.print_result("Exam successfully copied to folder '{0}'".format(destination_path))
     return True
+
+
+def create_schedule(console, subject, subsubject, exam_count):
+    """
+    creates a schedule and learning process object for the given subject, with the given amount of total exams
+    :param console: -
+    :param subject: (string) the subject to schedule
+    :param subsubject: (string) the subsubject to schedule
+    :param exam_count: (int) the total amount of exams to solve during the whole process
+    :return: (void)
+    """
+    console.print_info("Creating schedule for '{} - {}'".format(subject, subsubject))
+    # creating the learning process object and calling the schedule creation method
+    learning_process = learncoach.LearningProcess(subject, subsubject)
+    learning_process.create_schedule(exam_count=exam_count)
+    console.print_info("schedule created")
+    # now saving the learning process object as file
+    learncoach.save_learning_process(learning_process)
+    console.print_result("learning schedule '{} - {}' saved")
+
+
+def active_schedules(console):
+    """
+    shows all active learning processes
+    :param console: -
+    :return: (void)
+    """
+    name_list = learncoach.names_all_learning_processes(with_path=False)
+    name_list =list(map(lambda x: x.replace("_", " - ").replace(".pkl", "") + "\n", name_list))
+    console.print_info(''.join(["Active learning processes:\n\n"] + name_list))
+
+
+def show_schedule(console, subject, subsubject):
+    """
+    displays the schedule of the specified subject
+    :param console: -
+    :param subject: (string) the subject
+    :param subsubject: (string) the sub subject
+    :return: (string) the string representation of the schedule
+    """
+    # loading the learning process object, that contains the schedule
+    learning_process = learncoach.load_learning_process(subject, subsubject)
+    # printing the schedules string rep
+    schedule_string = learning_process.get_schedule_string()
+    console.print_info("The schedule of '{} - {}':\n\n{}".format(subject, subsubject, schedule_string))
+    return schedule_string
+
+
+def show_progress(console, subject, subsubject):
+    """
+    displays the schedule of the specified subject
+    :param console: -
+    :param subject: (string) the subject
+    :param subsubject: (string) the sub subject
+    :return: (string) the string representation of the schedule
+    """
+    # loading the learning process object, that contains the schedule
+    learning_process = learncoach.load_learning_process(subject, subsubject)
+    # printing the schedules string rep
+    progress_string = learning_process.get_progress_string()
+    console.print_info("The schedule of '{} - {}':\n\n{}".format(subject, subsubject, progress_string))
+    return progress_string
 
 
 def solve_exam(console, subject, subsubject):

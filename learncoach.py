@@ -231,6 +231,32 @@ class LearningProcess:
         timedelta = datetime.datetime.fromtimestamp(self.schedule[lookup_index][0]) - datetime.datetime.today()
         return timedelta.days
 
+    def get_schedule_string(self):
+        """
+        creates a string representation of the schedule, so it can be reviewed by the user.
+        Simple string rep takes the form:
+
+        due date         max points
+        2016-08-12       12
+        2016-09-1        34
+        ...              ...
+        :return: (string) the string form of the schedule
+        """
+        return self._get_simple_list_string_rep(self.schedule, 16, "due date", "max points")
+
+    def get_progress_string(self):
+        """
+        creates a string representation of the progress, so it can be reviewed by the user.
+        Simple string rep takes the form:
+
+        completion date  achieved points
+        2016-08-12       12
+        2016-09-1        34
+        ...              ...
+        :return: (string) the string form of the progress
+        """
+        return self._get_simple_list_string_rep(self.progress, 16, "solve date", "achieved points")
+
     def is_user_reminded(self):
         """
         since the main loop of the observing process that is gonna check this learning process will obviously run
@@ -267,6 +293,38 @@ class LearningProcess:
                                 int(math.floor(one_third) - delta)]
             return split_count_list
 
+    @staticmethod
+    def _get_simple_list_string_rep(iterable, column_length, column1_header, column2_header):
+        """
+        creates a string representation of an iterable, that consits of another iterable with each two entries:
+        [[1,2], [1,2], [1,2]].
+        The string rep will look like:
+        column1 header       column2 header
+        2016-08-12           12
+        2016-09-1            34
+        ...                  ...
+        :return: (string) the string form of the list
+        """
+        column_length_1 = column_length
+        string_list = []
+        # adding the headers to the list
+        string_list.append(column1_header)
+        string_list.append(" " * (column_length_1 - len(column1_header)))
+        string_list.append(column2_header)
+        string_list.append("\n")
+        for entry in iterable:
+            # adding the actual date to the string
+            date_string = str(datetime.datetime.fromtimestamp(entry[0]).date())
+            string_list.append(date_string)
+            string_list.append(" " * (column_length_1 - len(date_string)))
+            # adding the amount of max points to the string
+            string_list.append(str(entry[1]))
+            string_list.append("\n")
+        # removing the last new line from the last string
+        string_list.pop(-1)
+        # returning the string
+        return ''.join(string_list)
+
 
 class LearningCoach:
     """
@@ -287,7 +345,7 @@ class LearningCoach:
         # running the main loop all the time, since the Thread is supposed to be a background progress
         while True:
             # since the intervals between the are pretty macroscopic pausing the Thread for 3 hours (10800 seconds)
-            time.sleep(10800)
+            time.sleep(2)
 
             # getting list of all learning process objects
             learning_processes = list_learning_processes()
@@ -298,7 +356,7 @@ class LearningCoach:
                 # sends an email reminder and creates the exam
                 if learning_process.days_until_exam() <= 3 and not learning_process.is_user_reminded():
                     self.send_reminder_email(learning_process)
-                    learning_process.create_exam()
+                    # learning_process.create_exam()
                     learning_process.user_reminded = True
 
                 # Updating the progress for every learning process
