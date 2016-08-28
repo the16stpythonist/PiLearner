@@ -219,6 +219,11 @@ def solve_exam(console, subject, subsubject):
         session_exam.solve_length(minutes * 60)
         # saving the exam as another entry in its subject history
         exam.save_history_solved_exam(session_exam)
+        # updating the progress of an eventual learning process
+        try:
+            learncoach.load_learning_process(subject, subsubject).update_progress()
+        except:
+            pass
         console.print_result("The pending exam '{0} - {1}' has been solved!".format(subject, subsubject))
     else:
         raise FileNotFoundError("There exists no open session for the given subjects!")
