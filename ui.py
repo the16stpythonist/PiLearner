@@ -5,6 +5,7 @@ from kivy.uix.codeinput import CodeInput
 from kivy.properties import StringProperty
 from kivy.properties import ListProperty
 from kivy.properties import BooleanProperty
+from kivy.properties import NumericProperty
 from kivy.uix.button import Button
 from kivy.graphics import Color
 
@@ -123,7 +124,9 @@ class ExerciseCreation(GridLayout):
     points_valid = BooleanProperty(False)
     content_valid = BooleanProperty(False)
 
-    def __init__(self, subject, subsubject):
+    font_size = NumericProperty(0)
+
+    def __init__(self, subject, subsubject, font_size=13):
         super(ExerciseCreation, self).__init__()
 
         self.subject = subject
@@ -137,11 +140,13 @@ class ExerciseCreation(GridLayout):
         self.rows = 4
         self.padding = 5
         self.spacing = 5
+        self.font_size = font_size
 
         # The description label will contain the information, for which subject the exercise will be created. This
         # information will be bold, which means the text markup has to be activated for the Label.
         description = "Exercise in '[b]{} - {}[/b]'".format(self.subject, self.subsubject)
         self.label_description = Label()
+        self.label_description.font_size = self.font_size
         self.label_description.markup = True
         self.label_description.text = description
         self.label_description.size_hint_y = None
@@ -163,6 +168,7 @@ class ExerciseCreation(GridLayout):
         # string of what should be entered as default text content themselves.
         # To add such a description, the 'label_text' property of the widget has to be set to the wanted string.
         self.text_input_name = LabeledTextInput()
+        self.text_input_name.font_size = self.font_size
         self.text_input_name.label_text = "exercise name"
         # important: The binding of this callback method has to be AFTER the text changed, if not it will result in
         # a bug, that displays the wrong background color in the beginning (only in the beginning though)
@@ -171,6 +177,7 @@ class ExerciseCreation(GridLayout):
         self.text_input_name.size_hint_x = 0.8
 
         self.text_input_points = LabeledTextInput()
+        self.text_input_points.font_size = self.font_size
         self.text_input_points.label_text = "max points"
         self.text_input_points.bind(text=self.on_text_input_points)
         self.text_input_points.multiline = False
@@ -184,8 +191,8 @@ class ExerciseCreation(GridLayout):
 
         # The next widget is the actual TextInput, designed for entering the LaTeX code of the actual function.
         self.text_input_latex = LatexCodeInput()
+        self.text_input_latex.font_size = self.font_size
         self.text_input_latex.multiline = True
-        self.text_input_latex.size_hint_y = 0.7
 
         self.add_widget(self.text_input_latex)
 
@@ -199,10 +206,11 @@ class ExerciseCreation(GridLayout):
         self.grid_layout_submit.rows = 1
         self.grid_layout_submit.spacing = 5
         self.grid_layout_submit.size_hint_y = None
-        self.grid_layout_submit.height = 35
+        self.grid_layout_submit.height = 30
 
         # The button widget, that has to be pressed to save the exercise
         self.button_submit = Button()
+        self.button_submit.font_size = self.font_size
         self.button_submit.text = "submit"
         self.button_submit.bind(on_press=self.on_submit)
         self.button_submit.size_hint_x = None
@@ -211,6 +219,7 @@ class ExerciseCreation(GridLayout):
 
         # The Label widget, that displays the status of the input infromation
         self.label_info = Label()
+        self.label_info.font_size = self.font_size
         self.label_info.markup = True
         self.label_info.text = "No input has been entered yet"
         self.grid_layout_submit.add_widget(self.label_info)
@@ -253,6 +262,27 @@ class ExerciseCreation(GridLayout):
         subject_path = "{}\\subjects\\{}\\{}".format(project_path, self.subject, self.subsubject)
 
         return subject_path
+
+    def on_font_size(self, *args):
+        """
+        The callback for the observer Event in case the font size of the widget was changed. The method will update
+        the new changed font size to all other subwidgets with some sort of Text display.
+        (Maybe add the feature that the hight of those widgets changes dynamically as well, because at the point the
+        changing of the font size will fuck up the format)
+        :param args:
+        :return:
+        """
+        # Updating the font size of all the input widgets
+        self.text_input_latex.font_size = self.font_size
+        self.text_input_points.font_size = self.font_size
+        self.text_input_name.font_size = self.font_size
+
+        # Updating the font size of all the labels
+        self.label_description.font_size = self.font_size
+        self.label_info.font_size = self.font_size
+
+        # Updating the font size of the button
+        self.button_submit.font_size = self.font_size
 
     def on_text_input_name(self, *args):
         """
