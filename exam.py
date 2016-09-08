@@ -287,6 +287,7 @@ class Exam:
         else:
             if isinstance(exercise_list, exercise.ExerciseList):
                 self.exercise_list = exercise_list
+                self.max_points = self.calculate_max_points()
             else:
                 raise TypeError("The passed list doesnt contain Exercise objects")
 
@@ -315,6 +316,7 @@ class Exam:
     def create_content(self):
         # generating the exercise list, from which the content will be created
         self._choose_content_exercises()
+        self.max_points = self.calculate_max_points()
 
         # assembling the static header strings
         content_string_list = [LATEX_EXAM_HEADER,
@@ -371,6 +373,16 @@ class Exam:
 
     def get_content(self):
         return self.content
+
+    def calculate_max_points(self):
+        """
+        calculates the max points of the exam
+        :return: (int) the max points
+        """
+        max_points = 0
+        for exer in self.exercise_list:
+            max_points += exer.max_points
+        return max_points
 
     def get_exercise_paths_list(self):
         return self.exercise_list.get_paths_list()

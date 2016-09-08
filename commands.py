@@ -222,8 +222,9 @@ def solve_exam(console, subject, subsubject):
         # updating the progress of an eventual learning process
         try:
             learncoach.load_learning_process(subject, subsubject).update_progress()
-        except:
-            pass
+            console.print_result("learning process updated!")
+        except Exception as e:
+            console.print_error(e)
         console.print_result("The pending exam '{0} - {1}' has been solved!".format(subject, subsubject))
     else:
         raise FileNotFoundError("There exists no open session for the given subjects!")

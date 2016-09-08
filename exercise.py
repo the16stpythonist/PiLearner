@@ -104,6 +104,62 @@ def load_exercise(subject, subsubject, name):
     return Exercise(name, max_points, content, answer, average_points, last_used, use_frequency, exercise_path)
 
 
+def create_exercise(subject, subsubject, name, max_points, content, answer):
+    """
+    The function will create a new exercise for the specified subject. More specifically the exercise will be created
+    as a new folder within the folder of the subject and the exercise folder will share the name of the exercise itself.
+    Inside this exercise folder there will be the files that are used to save and load the exercises. Those files
+    consist of a content.tex TEX file, that contains the actual tex exercise string, a config.ini INI file, that
+    contains information about the amount of points for the exercise, but also statistical data such as the average
+    points for that exercise and the use frequency as well as a history of past uses.
+    Args:
+        subject: The string name of the major subject
+        subsubject: The string name of the more specific subject
+        name: The string of the exercise name
+        max_points: The integer of how many points the exercise is worth
+        content: The string of the tex code, that describes the actual exercise
+        answer: not used yet
+    Returns:
+        void
+    """
+    # Creating the path string to the folder of the specified subject
+    subject_path = "{}\\subjects\\{}\\{}".format(PROJECT_PATH, subject, subsubject)
+
+    # Creating a new folder within the subject folder. This folder will have the name of the exercise and contain the
+    # relevant files, being the content TEX file and the config INI
+    exercise_path = "{}\\{}".format(subject_path, name)
+    os.mkdir(exercise_path)
+
+    # Creating the the config file within the folder of the exercise and adding the INFO, STATISTIC and HISTORY section
+    config_content = [
+        "[INFO]\n",
+        "name = {}\n".format(name),
+        "max_points = {}\n\n".format(max_points),
+        "[STATISTIC]\n",
+        "average_points = 0\n",
+        "use_frequency = 0\n",
+        "last_use = 0\n\n",
+        "[HISTORY]\n"
+    ]
+    config_file_path = "{}\\config.ini".format(exercise_path)
+    with open(config_file_path, mode="w+") as config_file:
+        for line in config_content:
+            config_file.write(line)
+        config_file.flush()
+
+    # Creating the content tex file and writing the passed string to it
+    content_file_path = "{}\\content.tex".format(exercise_path)
+    with open(content_file_path, mode="w+") as content_file:
+        content_file.write(content)
+        content_file.flush()
+
+    # Creating the answer tex file and writing the passed string to it
+    answer_file_path = "{}\\answer.tex".format(exercise_path)
+    with open(answer_file_path, mode="w+") as answer_file:
+        answer_file.write(answer)
+        answer_file.flush()
+
+
 class ExerciseHistory:
     """
     The ExerciseHistory objects are basically dictionary style sequnces, that contain the record of all past uses of
