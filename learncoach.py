@@ -207,16 +207,15 @@ class LearningProcess:
         if len(self.history) > self.exams_already_done:
             exam_count_difference = len(self.history) - self.exams_already_done
             keys_list = self.history.keys()
-            for i in range(exam_count_difference):
+            for i in list(range(exam_count_difference)):
                 # since not the first few items but the last of the history shall be addressed, the negative index
                 reverse_index = -(i+1)
                 # applying this index to the key list to get the last few items. Items of the SubjectHistory are lists
                 # with three items each [max_points, points, length]
                 history_item = self.history[keys_list[reverse_index]]
                 # updating the max points of the schedule and adding the timestamp (key) and actual points to progress
-                self.schedule[len(self.progress)] = history_item[0]
+                self.schedule[len(self.progress)][1] = history_item[0]
                 self.progress.append([float(keys_list[reverse_index]), history_item[1]])
-                self.exams_already_done += 1
             # resetting the user was reminded state, as the exam of the reminder was done
             self.user_reminded = False
 
@@ -255,7 +254,17 @@ class LearningProcess:
         ...              ...
         :return: (string) the string form of the progress
         """
-        return self._get_simple_list_string_rep(self.progress, 16, "solve date", "achieved points")
+        schedule_lines = self._get_simple_list_string_rep(self.schedule, 16, "due date", "max points").split("\n")
+        progress_lines = self._get_simple_list_string_rep(self.progress, 16, "solved", "achieved points").split("\n")
+
+        # assembling the two into one list
+        combined_string_list = []
+        for index in range(len(schedule_lines)):
+            combined_string_list.append(schedule_lines[index])
+            if index < len(progress_lines):
+                combined_string_list.append(progress_lines[index])
+            combined_string_list.append("\n")
+        return ''.join(combined_string_list[:-1])
 
     def is_user_reminded(self):
         """
@@ -311,6 +320,7 @@ class LearningProcess:
         string_list.append(column1_header)
         string_list.append(" " * (column_length_1 - len(column1_header)))
         string_list.append(column2_header)
+        string_list.append(" " * (column_length_1 - len(column2_header)))
         string_list.append("\n")
         for entry in iterable:
             # adding the actual date to the string
@@ -319,6 +329,7 @@ class LearningProcess:
             string_list.append(" " * (column_length_1 - len(date_string)))
             # adding the amount of max points to the string
             string_list.append(str(entry[1]))
+            string_list.append(" " * (column_length_1 - len(str(entry[1]))))
             string_list.append("\n")
         # removing the last new line from the last string
         string_list.pop(-1)
@@ -344,8 +355,6 @@ class LearningCoach:
     def run(self):
         # running the main loop all the time, since the Thread is supposed to be a background progress
         while True:
-            # since the intervals between the are pretty macroscopic pausing the Thread for 3 hours (10800 seconds)
-            time.sleep(1800)
 
             # getting list of all learning process objects
             learning_processes = list_learning_processes()
@@ -375,6 +384,9 @@ class LearningCoach:
 
                 # saving the learning process objects into the files
                 save_learning_process(learning_process)
+
+            # since the intervals between the are pretty macroscopic pausing the Thread for 3 hours (10800 seconds)
+            time.sleep(1800)
 
     # TODO: Find a better solution for the email thing, all the settings has to enable for the use are too complicated
     def send_reminder_email(self, learning_process):
