@@ -1,6 +1,29 @@
+"""
+USAGE:
+To use the piver module as a building block for a given project one has to:
+
+1) The Server:
+It is recommended to create a new Server class, that inherits from the 'PiverServer' class, as the server itself can
+then be assigned with new tasks and new properties/attributes. Far more important though is the creation of a new
+handler class, inheriting from the 'PiverRequestHandler' class, which is the core class for adding new functionality.
+If the developer wants to add a new remote functionality of the server, that can be called by the client, he simply has
+to add the according method to the handler class (The first parameter of that method has to be reserved for the
+RequestTransfer object, that triggered the method call) and define its parameters, it will automatically be called by,
+when the server receives a RequestTransfer object, that specifies said method by its string name
+
+2) The Client:
+A new Client class has to be created. The client class has to inherit from the 'BaseClient' class of the piver module.
+This class already provides the necessary functionality to establish a socket connection to the server if given the
+ip and the port, login and obtain an authentication code and send request objects pretty easily.
+A new remote functionality of the server in the form of a new method for the handler class can be called by the client,
+by passing the string name of this method and a list with parameters for that method to the 'request' method of the
+client object
+
+User profiles can be extended as one wishes, as long as the original functionality of organizing the login data
+(username, password) is not being shadowed.
+"""
 import configparser
 import socketserver
-import threading
 import datetime
 import socket
 import random
@@ -24,9 +47,16 @@ def get_project_path():
 PROJECT_PATH = get_project_path()
 
 
-class UserProfile:
+class BaseUserProfile:
+    """
+    The 'BaseUserProfile' is a (abstract) base class for all further, more specific UserProfile classes. This class
+    contains the most basic and required properties of a user profile, which are the username and the password.
 
-    def __init__(self, username, password, progresses):
+    Attributes:
+        username: The string user name, under which the user is registered on the server
+        password: The string password for the users account
+    """
+    def __init__(self, username, password):
         self.username = username
         self.password = password
 
@@ -37,9 +67,19 @@ class UserProfile:
         """
         return self.password
 
+    def get_username(self):
+        """
+        Returns:
+        The username with which the profile is connected
+        """
+        return self.username
+
 
 class UserDict(dict):
-
+    """
+    The UserDict class is a specialized dictionary class, that has to be created during the runtime of the server
+    program, it manages all user profiles kkkkkkkkkkkkkk
+    """
     def __init__(self):
         super(UserDict, self).__init__()
         pass
@@ -76,6 +116,7 @@ class UserDict(dict):
             return True
         else:
             return False
+
 
 class BaseTransferObject:
 
@@ -146,16 +187,93 @@ class LoginTransfer:
         """
         self.authentication_code = authentication_code
 
-class RequestObject(BaseTransferObject):
 
+class RequestTransfer(BaseTransferObject):
+    """
+    The 'RequestTransfer' objects, or request objects in short, are created by the client side program and then sent
+    to the server. They are created with the intention of triggering some sort of action and a response within the
+    server. This requested action of the server side program is being specified by passing the request object the
+    string name of a method, more specifically a method of the handler object, that is created by the server once the
+    request was received and then handles the incoming communication attempt.
+    If a developer now wanted to add a new remote action to the project that uses piver servers the functionality would
+    only have to be implemented as a method of the handler object and then a request object with the methods name
+    would have to be sent to the server. The request objects also requires the 'parameter_list' parameter, which is
+    a list of all the positional parameters, that should additionally be added to the method call of the handler.
+    Once the action within the server side program has been successfully executed, a response of some sort will have
+    been created. This response is then added to the request object and the object is being send back to the client,
+    where the response can be read.
+
+    Attributes:
+        authentication_code: The string authentication code of the client object, that created the request object
+        request_subject: the string method name of the method of the handler object to be called
+        parameter_list: The list of all the positional parameters to be added to the method call
+    """
     def __init__(self, authentication_code, request_subject, parameter_list):
-        super(RequestObject, self).__init__(authentication_code)
+        super(RequestTransfer, self).__init__(authentication_code)
         self.request_subject = request_subject
         self.parameters = parameter_list
+        self.response = None
+
+    def add_response(self, response):
+        """
+        The response to the initial RequestTransfer object sent to the server does not contain a response. Its
+        'response' property is empty. The response is being created by the server side program, then added to the object
+        and the object is being sent back to the client, now containing the response.
+        This method is for the server to add the generated response to the object.
+        Args:
+            response: whatever object the server uses as a response to the initial request
+
+        Returns:
+        void
+        """
+        self.response = response
+
+    def get_method_name(self):
+        """
+        The RequestTransfer object is being created by the client side program, it will contain the information about
+        the 'request_subject', which essentially is the name of the method of the RequestHandler object, that is to be
+        called within the server side program.
+        Therefore this method returns exactly this method name, which is the subject of the request
+        Returns:
+        The string of the method name
+        """
+        return self.request_subject
+
+    def get_parameter_list(self):
+        """
+        Since many of the RequestHandlers methods processes are dependant on additional parameters, those parameters
+        can also be passed to the server by putting them (IN ORDER) into a parameter list, that is also being
+        transported with the RequestTransfer object.
+        Returns:
+        The list, containing all the POSITIONAL arguments of the method to call
+        """
+        return self.parameters
+
+    def get_response(self):
+        """
+        The response to the initial RequestTransfer object sent to the server does not contain a response. Its
+        'response' property is empty. The response is being created by the server side program, then added to the object
+        and the object is being sent back to the client, now containing the response.
+        This method returns the value of the objects attribute 'response'. Should only be called after the object came
+        back from the server, as the attribute will be None before.
+        Returns:
+        Whatever object the server created as response to the initial request
+        """
+        return self.response
 
 
-class PiLearnClient:
-
+class PiverClient:
+    """
+    The base class for all further, individual client classes. The client object is an object that has to be created and
+    alive during the runtime of the client side program of a piver project. The client essentially manages all
+    communication with the server and is supposed to wrap more complex interactions between client and server into
+    simple methods.
+    To really use a client object it has to be created and then logged into the server system by calling the 'login'
+    method with the username and password of the registered user, by doing so the client obtains a authentication
+    code, that is required by any tranfer object sent through the socket connection, so that the server can identify
+    which request to execute for which user, without the client having to transmit the sensitive login information.
+    The client requires the server ip and the server to establish socket connections
+    """
     def __init__(self, server_ip, server_port):
         self.server_ip = server_ip
         self.server_port = server_port
@@ -191,11 +309,37 @@ class PiLearnClient:
         self.authentication_code = authentication_code
         return authentication_code
 
+    def request(self, method_name, parameter_list):
+        """
+        This method will create a 'RequestTransfer' object and send it to the server, using the authentication of the
+        client object (An error will be raised in case no authentication has been obtained up to call of this method).
+        The request system works by specifying a method of the servers RequestHandler object by its string name, that
+        is supposed to be executed in the server side program. The 'parameter_list' parameter gives the option to pass
+        the additional parameters to the method of the servers handler object.
+        Once the handler object successfully executed the requested method, a response of some sort will have been
+        created and is then being sent back to the client and this response is also being returned by this method
+
+        Args:
+            method_name: The string name of the method of the handler object to be called
+            parameter_list: The list containing the positional arguments to this method in order
+
+        Returns:
+        Whatever the response to the specific request was
+        """
+        # Calling the 'check_login' method to check whether or not the client object already obtained the necessary
+        # authentication code, raises an exception in the case there is no authentication code yet
+        self.check_login()
+        # Creating the 'RequestTransfer' object, to send to the server
+        request_transfer = RequestTransfer(self.authentication_code, method_name, parameter_list)
+        request_transfer_response = self.send(request_transfer)
+        # returning the response
+        return request_transfer_response.get_response()
+
     def send(self, obj, timeout=10):
         """
-        Creates a socket, that connects to the PiServer, by using the IP and the port attributes of the object and then
-        sends the given object pickled, as a byte sequence through the given socket to the server. The method will then
-        instantly wait for the server to make a response through the very same socket connection and returns the
+        Creates a socket, that connects to the PiverServer, by using the IP and the port attributes of the object and
+        then sends the given object pickled, as a byte sequence through the given socket to the server. The method will
+        then instantly wait for the server to make a response through the very same socket connection and returns the
         response as a BYTE SEQUENCE.
 
         Raises:
@@ -236,6 +380,29 @@ class PiLearnClient:
         self._raise_exception(response)
 
         return response
+
+    def check_login(self):
+        """
+        Checks whether the client object is logged into the server system or not. More specifically: Checking whether
+        the client object posses an authentication code, that is needed for all communication with the server.
+        Raises a PermissionError in case the client is not logged in.
+        This method is supposed to be called before calling any other method, that sends transfer objects, that rely on
+        valid authentication codes.
+        Returns:
+        void
+        """
+        if not self.is_logged_in():
+            error_message = "The client does not have a authentication code. Log in first!"
+            raise PermissionError(error_message)
+
+    def is_logged_in(self):
+        """
+        Returns:
+        The boolean value of whether the client is logged into the server system, meaning the client posses an
+        authentication code
+        """
+        authentication_code_exists = self.authentication_code is not None
+        return authentication_code_exists
 
     def _get_server_tuple(self):
         """
@@ -470,7 +637,7 @@ class AuthenticationGuard:
         return code_datetime
 
 
-class PiLearnServer(socketserver.TCPServer, socketserver.ThreadingMixIn):
+class PiverServer(socketserver.TCPServer, socketserver.ThreadingMixIn):
     """
     The PiLearnServer class is a subclass of the socketserver.TCPServer class from the python 'socketserver' module.
     The socketserver module wraps the functionality of python sockets into a slightly higher level server object/
@@ -510,12 +677,12 @@ class PiLearnServer(socketserver.TCPServer, socketserver.ThreadingMixIn):
     def __init__(self, server_address, RequestHandlerClass, authentication_guard, user_dict, bind_and_activate=True):
         # Initializing the actual Server class from the python 'socketserver' module and also adding the attribute of
         # the authentication guard, to make it available within the handling method later
-        super(PiLearnServer, self).__init__(server_address, RequestHandlerClass, bind_and_activate=bind_and_activate)
+        super(PiverServer, self).__init__(server_address, RequestHandlerClass, bind_and_activate=bind_and_activate)
         self.authentication_guard = authentication_guard
         self.user_dict = user_dict
 
 
-class TCPRequestHandler(socketserver.BaseRequestHandler):
+class PiverRequestHandler(socketserver.BaseRequestHandler):
 
     def __init__(self, request, client_address, server):
         # IMPORTANT INFO:
@@ -566,10 +733,10 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
             is_valid = self.authentication_guard.is_valid_authentication(authentication_code)
             if not is_valid:
                 # TODO: What to to in case the authentication code is not valid anymore
+                pass
 
-            response = ""
             # Now checking for the object type to determine to which sub-handling method to redirect the object to
-            if isinstance(received_object, RequestObject):
+            if isinstance(received_object, RequestTransfer):
                 # In case the object is a request object, the handler object will redirect the processing of the
                 # received object to the designated method
                 response = self.handle_request(received_object)
@@ -613,16 +780,16 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         # attempted to login with an non existent username
         user_exists = self.user_dict.user_exists(username)
         if not user_exists:
-            error_string = "The username '{}' does not exist!".format(username)
-            return ConnectionRefusedError(error_string)
+            error_message = "The username '{}' does not exist!".format(username)
+            return ConnectionRefusedError(error_message)
 
         # In case the username existed, the validity of the password to the username is now being checked.
         # In case the password is not correct, returns a PermissionError to send back as an response to the user,
         # to whom the username belongs
         password_valid = self.user_dict.password_valid(username, password)
         if not password_valid:
-            error_string = "The password for the given username '{}' is not correct".format(username)
-            return PermissionError(error_string)
+            error_message = "The password for the given username '{}' is not correct".format(username)
+            return PermissionError(error_message)
 
         # If the login request came from a user, that already posses an authentication code, that is valid simply
         # sending the stored one to the user again, instead of creating a new one
@@ -639,7 +806,35 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         return login_transfer
 
     def handle_request(self, received_object):
-        pass
+        """
+        This method is the first instance of handling the incoming requests. Those 'RequestTransfer' objects, that are
+        passed to this method, contain a authentication code, so the following processes know which user to assign the
+        action, they contain the string name of a method of handler object and a list with parameters to pass to this
+        method.
+        This method uses the method name string and the parameter list to actually call the requested method and return
+        the response, that has been returned by this specific method
+        Args:
+            received_object: The 'RequestTransfer' object specifying, which method to call
 
+        Returns:
+        The response, that has been generated by the method, that was requested
+        """
+        # Getting the string method name of the method that is supposed to be called and checking whether such a method
+        # even exists or not. In case the method does not exists, this method will return
+        method_name = received_object.get_method_name()
+        method_exists = hasattr(self, method_name)
+        if not method_exists:
+            error_message = "The server RequestHandler does not support a method named '{}'".format(method_name)
+            return AttributeError(error_message)
 
+        parameter_list = received_object.get_parameter_list()
+        # Calling the specified method of the this handler object with the parameters from the parameter list.
+        # Excepting a TypeError due to a possibly wrong amount or wrong type of passed parameters
+        method = getattr(self, method_name)
+        try:
+            response = method(received_object, *parameter_list)
+        except TypeError as error:
+            return error
 
+        # Returning the response, that was generated by the method, that was called through the request
+        return response
