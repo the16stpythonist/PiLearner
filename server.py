@@ -24,6 +24,59 @@ def get_project_path():
 PROJECT_PATH = get_project_path()
 
 
+class UserProfile:
+
+    def __init__(self, username, password, progresses):
+        self.username = username
+        self.password = password
+
+    def get_password(self):
+        """
+        Returns:
+        The password of the user, the profile belongs to
+        """
+        return self.password
+
+
+class UserDict(dict):
+
+    def __init__(self):
+        super(UserDict, self).__init__()
+        pass
+
+    def user_exists(self, username):
+        """
+        Checks Whether or not the user exists/ is registered in the servers database
+        Args:
+            username: The string of the username in question
+
+        Returns:
+        The boolean value of whether or not the user exists
+        """
+        # If the user existed, the username would have to be a key of the dictionary, whose assigned value would be
+        # the UserProfile of the according user
+        user_exists = username in self.keys()
+        return user_exists
+
+    def password_valid(self, username, password):
+        """
+        Checks whether or not the given password is the correct password for the given username
+        Args:
+            username: The string format of the username, whose password is to be checked
+            password: The string format of the password in question
+
+        Returns:
+        The boolean value of whether or not the specified password is actually correct for the given username
+        """
+        # The methods goes on and loads the correct password, that is stored within the user profile and then compares
+        # it to the password in question
+        user_profile = self[username]
+        stored_password = user_profile.get_password()
+        if password == stored_password:
+            return True
+        else:
+            return False
+
 class BaseTransferObject:
 
     def __init__(self, authentication_code):
@@ -32,6 +85,66 @@ class BaseTransferObject:
     def get_authentication(self):
         return self.authentication_code
 
+
+class LoginTransfer:
+    """
+    Objects of this class are being used to establish for the first communication attempt between a client program and
+    the server. By sending an object of this type the user identifies himself with his username and his password to
+    request an authentication code, that can be used as an temporary identifier for all further communication.
+    The authentication code exists, so that the server knows which user profile to activate/edit upon receiving a
+    request.
+
+    Attributes:
+        username: The string of the username of the user, requesting the authentication code
+        password: The string of the password of the user requesting the authentication code
+        authentication_code: Is None at first (upon creation) but gets set to the string of the authentication code
+            by the server and maintains that value, when being sent back to the user
+    """
+    def __init__(self, username, password):
+        # Assigning the given username and password as object attributes, so they are stored during the pickled socket
+        # transfer
+        self.username = username
+        self.password = password
+        # After the object has been created by the user side of the program it is being sent to the server, where a
+        # authentication code is being created by the authentication guard and then added as attribute to this object
+        # then the object is being sent back to the user, where the authentication code can be stored and used
+        self.authentication_code = None
+
+    def get_username(self):
+        """
+        Returns:
+        The string of the username, of the user, that sent the login request
+        """
+        return self.username
+
+    def get_password(self):
+        """
+        Returns:
+        The string of the password of the user
+        """
+        return self.password
+
+    def get_authentication(self):
+        """
+        Notes:
+            This method should only by called, once the object was sent back from the server, as the authentication code
+            property of such an object is None, until one is being created and added by the server.
+        Returns:
+        The string format of the authentication code, that was created for the user.
+        """
+        return self.authentication_code
+
+    def add_authentication_code(self, authentication_code):
+        """
+        Adds the authentication code, that was created for the user with the specified username and password, as the
+        authentication_code property of the object
+        Args:
+            authentication_code: The string format of the authentication code, created by the authentication guard
+
+        Returns:
+        void
+        """
+        self.authentication_code = authentication_code
 
 class RequestObject(BaseTransferObject):
 
@@ -46,6 +159,37 @@ class PiLearnClient:
     def __init__(self, server_ip, server_port):
         self.server_ip = server_ip
         self.server_port = server_port
+        self.authentication_code = None
+
+    def login(self, username, password):
+        """
+        This method attempts to log into the server using the users data, that is specified by the username and the
+        password. A LoginTransfer object is being sent to the server and in response a authentication code is being
+        created and sent back as a response. The authentication code is then being assigned as the value to the clients
+        'authentication_code' property and also returned. The authentication code is being used as a temporary
+        identifier, that has to be sent with every following communication with the server, so the server knows
+        which request belongs to which user and which users profile is to be modified.
+
+        Raises:
+            ConnectionRefusedError: In case the username is not registered in the server database
+            PermissionError: In case the password is not correct
+
+        Args:
+            username: The string of the username
+            password: The string of the password
+
+        Returns:
+        The string of the authentication code
+        """
+        # Creating the 'LoginTransfer' object, that signals the server, that the sent request is an attempted login
+        # for obtaining an authentication code for the specified user.
+        login_transfer = LoginTransfer(username, password)
+        # Sending the object and getting the response from the send method. The response is supposed to be the very
+        # same object, that was sent, only with the now created authentication code added
+        login_transfer_response = self.send(login_transfer)
+        authentication_code = login_transfer_response.get_authetication()
+        self.authentication_code = authentication_code
+        return authentication_code
 
     def send(self, obj, timeout=10):
         """
@@ -57,7 +201,11 @@ class PiLearnClient:
         Raises:
             socket.SO_ERROR: The socket error is being fetched by a try except statement, so that the socket can be
                 properly closed first, but the very same error is then raised again, so that the higher level
-                functionality can handle its occurance properly
+                functionality can handle its occurrance properly
+            Exception: The socket connection works by the user sending a specific transfer object to accomplish/trigger
+                a specific task within the server side program, which in turn then sends back a response.
+                In case the initial request was faulty though the server would send back some sort of Exception object,
+                describing the error, that occured during the processing of the request.
         Args:
             obj: The object to be send through the socket to the server
             timeout: The amount of time in seconds, after which the connect should be terminated
@@ -83,6 +231,10 @@ class PiLearnClient:
             raise error
 
         sock.close()
+        # In case the received object was an exception, indication that an error occurred during the processing of the
+        # initial request, the exception will be risen
+        self._raise_exception(response)
+
         return response
 
     def _get_server_tuple(self):
@@ -94,6 +246,23 @@ class PiLearnClient:
         """
         server_tuple = (self.server_ip, self.server_port)
         return server_tuple
+
+    @staticmethod
+    def _raise_exception(received_object):
+        """
+        The socket connection works by the user sending a specific transfer object to accomplish/trigger a specific
+        task within the server side program, which in turn then sends back a response.
+        In case the initial request was faulty though the server would send back some sort of Exception object,
+        describing the error, that occured during the processing of the request.
+        This method has to be called on the received object, as it will raise the exception in case it is one.
+        Args:
+            received_object: The received object, that came back as the response to the initial request
+
+        Returns:
+        void
+        """
+        if isinstance(received_object, Exception):
+            raise received_object
 
 
 class AuthenticationGuard:
@@ -188,11 +357,24 @@ class AuthenticationGuard:
                 is_valid = True
 
         # Adding the authentication code to the list of already existing codes, so that users will not get the same
-        # code and adding the username reference to the dictionary of users, currently possessing a authentication code
+        # code and adding the username reference to the dictionary of users, currently possessing a authentication code.
         self.existing_codes.append(authentication_code)
         self.user_dictionary[authentication_code] = username
 
         return authentication_code
+
+    def user_exists(self, username):
+        """
+        Args:
+            username: The string format of the username in question
+
+        Returns:
+        The boolean value of whether or not a user with the given username currently possesses am authentication code
+        """
+        if username in self.user_dictionary:
+            return True
+        else:
+            return False
 
     def is_valid_authentication(self, authentication_code):
         """
@@ -234,6 +416,27 @@ class AuthenticationGuard:
         if authentication_code in self.user_dictionary.keys():
             return self.user_dictionary[authentication_code]
 
+    def get_authentication_code(self, username):
+        """
+        Searches for the username in question to be part of the internal dictionaries values and returnes the according
+        key (authentication code) once found.
+        Args:
+            username: The string format of the username for which to return the authentication code for
+
+        Returns:
+        The string format of the authentication code
+        """
+        # Simply iterates through the dictionary values, which are the user names and if the given username is the same
+        # as a username of the dictionary, the key (code) belonging to that user will be returned.
+        for authentication_code in self.user_dictionary.keys():
+            current_username = self.user_dictionary[authentication_code]
+            if current_username == username:
+                return authentication_code
+        # If the loop terminating, without anything being returned raising a KeyError to be handled
+        raise KeyError("The user '{}' does not posses an authentication code!")
+
+
+
     @staticmethod
     def get_timestamp_from_authentication_code(authentication_code):
         """
@@ -265,17 +468,6 @@ class AuthenticationGuard:
         code_timestamp = AuthenticationGuard.get_timestamp_from_authentication_code(authentication_code)
         code_datetime = datetime.datetime.fromtimestamp(code_timestamp)
         return code_datetime
-
-
-class PiLearnRequestHandler(threading.Thread):
-
-    is_running = False
-
-    def __init__(self, authentication_guard):
-        self.authentication_guard = authentication_guard
-
-    def run(self):
-        self.is_running = True
 
 
 class PiLearnServer(socketserver.TCPServer, socketserver.ThreadingMixIn):
@@ -315,11 +507,12 @@ class PiLearnServer(socketserver.TCPServer, socketserver.ThreadingMixIn):
         RequestHandlerClass: A reference to the class, that handles the incoming connections and the data
         authentication_guard: The AuthenticationGuard object for the server, to manage the indivudual user codes
     """
-    def __init__(self, server_address, RequestHandlerClass, authentication_guard, bind_and_activate=True):
+    def __init__(self, server_address, RequestHandlerClass, authentication_guard, user_dict, bind_and_activate=True):
         # Initializing the actual Server class from the python 'socketserver' module and also adding the attribute of
         # the authentication guard, to make it available within the handling method later
         super(PiLearnServer, self).__init__(server_address, RequestHandlerClass, bind_and_activate=bind_and_activate)
         self.authentication_guard = authentication_guard
+        self.user_dict = user_dict
 
 
 class TCPRequestHandler(socketserver.BaseRequestHandler):
@@ -344,6 +537,7 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         # authentication guard object could be accessed via the server object, but the reference to the authentication
         # guard object is additionally being wrapped into an attribute of this very class, simplifying access
         self.authentication_guard = self.server.authentication_guard
+        self.user_dict = self.server.user_dict
 
     def handle(self):
         # Waiting for the data of any of the users clients to be received
@@ -356,21 +550,93 @@ class TCPRequestHandler(socketserver.BaseRequestHandler):
         except pickle.UnpicklingError as error:
             # TODO: add behaviour for unpinklling error
             pass
-        
-        # First getting the authentication of the sent object (the protocol dictates, that every object passing this
-        # socket connect has to inherit from the BaseTransferObject class and thus contain the information about the
-        # authentication code and methods to obtain this information
-        authentication_code = received_object.get_authentication()
-        is_valid = self.authentication_guard.is_valid_authentication(authentication_code)
-        if not is_valid:
-            # TODO: What to to in case the authentication code is not valid anymore
 
-        response = ""
-        # Now checking for the object type to determine to which sub-handling method to redirect the object to
-        if isinstance(received_object, RequestObject):
-            # In case the object is a request object, the handler object will redirect the processing of the received
-            # object to the designated method
-            response = self.handle_request(received_object)
+        # Checking whether or not the received request is a first time login attempt or an actual action request
+        # of an already authenticated user.
+        # In case the received object is indeed a login request calls the 'login' method, that processes the transfer
+        # object and generates the appropriate response object
+        if isinstance(received_object, LoginTransfer):
+            response = self.login(received_object)
+
+        else:
+            # First getting the authentication of the sent object (the protocol dictates, that every object passing this
+            # socket connect has to inherit from the BaseTransferObject class and thus contain the information about the
+            # authentication code and methods to obtain this information
+            authentication_code = received_object.get_authentication()
+            is_valid = self.authentication_guard.is_valid_authentication(authentication_code)
+            if not is_valid:
+                # TODO: What to to in case the authentication code is not valid anymore
+
+            response = ""
+            # Now checking for the object type to determine to which sub-handling method to redirect the object to
+            if isinstance(received_object, RequestObject):
+                # In case the object is a request object, the handler object will redirect the processing of the
+                # received object to the designated method
+                response = self.handle_request(received_object)
+
+        # sending the generated response back to the client
+        pickled_response = pickle.dumps(response)
+        self.request.sendall(pickled_response)
+
+    def login(self, login_transfer):
+        """
+        The method which processes the received requests from the socket connection, that turn out to be login requests
+        from the sending clients. Login requests are represented by the 'LoginTransfer' objects. They contain the
+        information about the username and the password, that the user had entered on the client side of the
+        connection, after verifying, that both the username and password exist and are correct, the method creates a
+        authentication code by calling the AuthenticationGuard, creates the reference from this individual code to the
+        username, adds the fresh authentication code to the LoginTransfer object and returns that object, so it can
+        be sent back to the client side as a response
+
+        Notes:
+            Could return:
+
+            ConnectionRefusedError: In case the method gets passed a LoginTransfer object with a username, that is not
+                registered in the servers system
+            PermissionError: In case the method gets passed a LoginTransfer object, whose username exists, but whose
+                password is not correct (The password doesnt match with the password, that was stored in the servers
+                memory)
+
+        Args:
+            login_transfer: The 'LoginTransfer' object, that was received and now is to be processed
+
+        Returns:
+        The same 'LoginTransfer' object, that was passed, but having added the created, individual authentication code
+        to it, that the user can use
+        """
+        username = login_transfer.get_username()
+        password = login_transfer.get_password()
+        # First checks whether the user actually exists or not by calling the user dict object.
+        # The user dict object stores the reference to all existing user profiles with them being the values to the
+        # usernames as keys.
+        # In case the user does not exists, returns a ConnectionRefusedError to send back as an response to who ever
+        # attempted to login with an non existent username
+        user_exists = self.user_dict.user_exists(username)
+        if not user_exists:
+            error_string = "The username '{}' does not exist!".format(username)
+            return ConnectionRefusedError(error_string)
+
+        # In case the username existed, the validity of the password to the username is now being checked.
+        # In case the password is not correct, returns a PermissionError to send back as an response to the user,
+        # to whom the username belongs
+        password_valid = self.user_dict.password_valid(username, password)
+        if not password_valid:
+            error_string = "The password for the given username '{}' is not correct".format(username)
+            return PermissionError(error_string)
+
+        # If the login request came from a user, that already posses an authentication code, that is valid simply
+        # sending the stored one to the user again, instead of creating a new one
+        if self.authentication_guard.user_exists(username):
+            authentication_code = self.authentication_guard.get_authentication_code(username)
+            login_transfer.add_authentication_code(authentication_code)
+
+        else:
+            # Creating the code authentication code and adding it to the LoginTransfer object before returning that
+            # object to be sent back to the client side program fro the user to utilize.
+            authentication_code = self.authentication_guard.create_authentication_code(username)
+            login_transfer.add_authentication_code(authentication_code)
+
+        return login_transfer
 
     def handle_request(self, received_object):
         pass
