@@ -160,6 +160,57 @@ def get_session_content(subject="", subsubject="", sessionfile_path=""):
     return session_lines_list
 
 
+def get_session_path_list():
+    """
+    Returns:
+    A list containing the string paths to all the currently existing session files
+    """
+    # Getting the path to the folder, in which the session files are stored. Iterating through the file names of the
+    # files within that 'exams' folder, building the full file paths and checking for them actually being files and for
+    # their file extensions.
+    session_path_list = []
+    exams_path = get_exams_path()
+    file_name_list = os.listdir(exams_path)
+    for file_name in file_name_list:
+        file_path = os.path.join(exams_path, file_name)
+        if os.path.isfile(file_path):
+            # Getting the extension type from the file name. In case the file has the 'session' extension, adding it
+            # to the list of session file paths
+            extension_name = file_name.split(".")[1]
+            if extension_name == "session":
+                session_path_list.append(file_path)
+    return session_path_list
+
+
+def get_session_name_list():
+    """
+    Returns:
+    A list, containing the string names (without the file extensions) of all the currently existing session files
+    """
+    session_name_list = []
+    session_path_list = get_session_path_list()
+    for session_path in session_path_list:
+        session_name = get_session_name(session_path)
+        session_name_list.append(session_name)
+    return session_name_list
+
+
+def get_session_name(session_path):
+    """
+    Args:
+        session_path: The path string of the session file, whose name should be returned
+
+    Returns:
+    The name of the session file without the extension
+    """
+    # Getting the file name with extension from the whole path
+    file_name = os.path.basename(session_path)
+    # Because it can be assumed, that only the paths of actual session paths are being passed onto this function
+    # the actual name of the function without the extension can be obtained by removing the '.session' substring
+    file_name = file_name.replace(".session", "")
+    return file_name
+
+
 def exam_from_session(subject="", subsubject="", sessionfile_path=""):
     """
     creates and returns an Exam object instance, that was build with all the exercises from the session file specified.
@@ -247,6 +298,16 @@ def save_history_solved_exam(solved_exam):
         return True
     else:
         return False
+
+
+def get_exams_path():
+    """
+    Returns:
+    The path to the 'exams' folder of the project, inside which the session files and the actual pdf exams are
+    stored in
+    """
+    exams_path = "{}\\exams".format(exercise.PROJECT_PATH)
+    return exams_path
 
 
 # TODO: update doc string
