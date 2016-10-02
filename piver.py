@@ -24,10 +24,13 @@ User profiles can be extended as one wishes, as long as the original functionali
 """
 import configparser
 import socketserver
+import threading
 import datetime
 import socket
 import random
 import pickle
+import time
+import os
 
 
 def get_project_path():
@@ -78,7 +81,7 @@ class BaseUserProfile:
 class UserDict(dict):
     """
     The UserDict class is a specialized dictionary class, that has to be created during the runtime of the server
-    program, it manages all user profiles kkkkkkkkkkkkkk
+    program, it manages all user profiles
     """
     def __init__(self):
         super(UserDict, self).__init__()
@@ -319,6 +322,40 @@ class PiverClient:
         authentication_code = login_transfer_response.get_authetication()
         self.authentication_code = authentication_code
         return authentication_code
+
+    def download_file(self, relative_server_path, save_path, blocking=False):
+        """
+        Downloads a file from the server.
+        Sends a request for the file download, which triggers the server to check for the existance of the file,
+        specified by 'relative_server_path'. If the file exists the server acquires an open port and starts a
+        'FileSendServer' on it and sends the port of the server as a response back to the client.
+        The client then starts a 'ClientFileDownloader' object(thread) that automatically downloads the file and saves
+        it as specified by 'save_path'. The method can be blocking, meaning it waits till the download is finished, or
+        starts it and lets it run as a thread
+        Args:
+            relative_server_path: The string path that specifies the file to download. The path is supposed to be
+                relative to the servers main folder, meaning that files, that dont belong to the server cannot be
+                downloaded.
+            save_path: The string path to where the file is supposed to the saved to. In case the path does not
+                refer to an already existing file, the file is being created.
+            blocking: The boolean value of whether or not the method is supposed to wait till the download is finished
+                or not
+        Returns:
+        The string path of the saved file
+        """
+        # Requesting the 'download_file' method of the server, that checks for the existence of the file and opens a
+        # FileSendServer for the requested file in case the path was correct
+        file_server_port = self.request("download_file", relative_server_path)
+        # Creating a downloader object, that automatically downloads the file from the FileSendServer, that has been
+        # started at the server side program
+        downloader = SimpleClientFileDownloader(self.server_ip, file_server_port, save_path)
+        downloader.start()
+        if blocking:
+            # Waiting for the receiving process to finish in case the method was set to be blocking
+            downloader.wait()
+
+        # returning the full file path of the received file
+        return save_path
 
     def request(self, method_name, parameter_list):
         """
@@ -685,12 +722,14 @@ class PiverServer(socketserver.TCPServer, socketserver.ThreadingMixIn):
         RequestHandlerClass: A reference to the class, that handles the incoming connections and the data
         authentication_guard: The AuthenticationGuard object for the server, to manage the indivudual user codes
     """
-    def __init__(self, server_address, RequestHandlerClass, authentication_guard, user_dict, bind_and_activate=True):
+    def __init__(self, server_address, RequestHandlerClass, authentication_guard, user_dict, port_manager,
+                 bind_and_activate=True):
         # Initializing the actual Server class from the python 'socketserver' module and also adding the attribute of
         # the authentication guard, to make it available within the handling method later
         super(PiverServer, self).__init__(server_address, RequestHandlerClass, bind_and_activate=bind_and_activate)
         self.authentication_guard = authentication_guard
         self.user_dict = user_dict
+        self.port_manager = port_manager
 
 
 class PiverRequestHandler(socketserver.BaseRequestHandler):
@@ -716,6 +755,7 @@ class PiverRequestHandler(socketserver.BaseRequestHandler):
         # guard object is additionally being wrapped into an attribute of this very class, simplifying access
         self.authentication_guard = self.server.authentication_guard
         self.user_dict = self.server.user_dict
+        self.port_manager = self.server.port_manager
 
     def handle(self):
         # Waiting for the data of any of the users clients to be received
@@ -865,6 +905,43 @@ class PiverRequestHandler(socketserver.BaseRequestHandler):
         user_profile.set_password(password)
         return password
 
+    def download_file(self, received_object, relative_server_path):
+        """
+        The method being called, when a user request to download a file, specified by the path 'relative_server_path'.
+        The method checks whether the requested file exists (raises an error in case it doesnt) acquires an open port
+        from the port manager, starts a FileSendServer with the file and the port and sends the port of the server
+        back to the user as a response
+        Args:
+            received_object: -
+            relative_server_path: The string path that specifies the file to download. The path is supposed to be
+                relative to the servers main folder, meaning that files, that dont belong to the server cannot be
+                downloaded.
+
+        Returns:
+        The integer port number on which the file server is listening for an incoming connection of a downloader
+        """
+        # Getting the user profile of the user, which sent the request
+        user_profile = self.get_user_profile(received_object)
+
+        # This method is in charge of initializing the download of a file from the server to the client. The
+        # 'relative_server_path' parameter is supposed to contain the string path of the file which is meant to be
+        # downloaded by the client, the path being relative to the server programs main directory though.
+        # Creating the absolute path of the requested file, by joining the project path with the relative server path
+        file_path = os.path.join(PROJECT_PATH, relative_server_path)
+        file_exists = os.path.isfile(file_path)
+        if not file_exists:
+            raise FileNotFoundError("The requested file at '{}' does not exist".format(file_path))
+
+        # Acquiring an open port from the port manager and starting an open FileSendServer, to wait for an incoming
+        # socket connection from the client
+        port = self.port_manager.acquire()
+        file_server = SimpleFileSendServer(port, file_path)
+        file_server.start()
+
+        # Sending the port of the file server back to the client, so that the client can start a downloader thread,
+        # connecting to the file server, that downloads the file
+        return port
+
     def get_username(self, received_object):
         """
         First gets the authentication code from the received object and then passes the code to the authentication
@@ -893,3 +970,136 @@ class PiverRequestHandler(socketserver.BaseRequestHandler):
         username = self.get_username(received_object)
         user_profile = self.user_dict[username]
         return user_profile
+
+
+class SimpleClientFileDownloader(threading.Thread):
+    """
+    This object enables the download of file from a server to a client. The clients ip does not have to be know to the
+    server, only the servers public host address and the used port have to be known to the client. Also on the server
+    side there has to be running a 'SimpleFileSendServer' (more specifically one for every downloading client), that
+    listens on the specified port. The client will go on and establish a connection to the server and repeatedly send
+    little ping packages, to which the server responds with chunks of ~1KB of the files data until all the data
+    has been transferred to the client.
+
+    Attributes:
+        server_ip: The string, containing the servers IP address or hostname
+        server_port: The port on which the "SimpleFileSendServer" is running on the server
+        file: The file open() object in byte mode
+        receiving: The boolean value of whether or not the client is currently receiving data
+
+    Args:
+        server_ip: The string, containing the servers IP address or hostname
+        server_port: The port on which the "SimpleFileSendServer" is running on the server
+        file_path: The string path to the file, into which the received data is to be saved in. If the path does not
+            refer to an already existing file, a file will be created (in case the folder structure exists)
+    """
+    def __init__(self, server_ip, server_port, file_path):
+        threading.Thread.__init__(self)
+        self.server_ip = server_ip
+        self.server_port = server_port
+
+        # Creating the file object in byte mode and with the permission to create a new file if none already exists
+        self.file = open(file_path, mode="wb+")
+
+        self.receiving = False
+
+    def run(self):
+        address_tuple = (self.server_ip, self.server_port)
+        self.receiving = True
+
+        # Creating the socket object and connecting it it the server
+        sock = socket.socket()
+        sock.connect(address_tuple)
+
+        try:
+            while self.receiving:
+                # Sending a short message through the socket, so the server side program knows when a new cycle begins
+                sock.sendall(b"ok")
+                # receiving the actual data chunk of the file and writing it to the file object
+                data = sock.recv(1024)
+                self.file.write(data)
+        except Exception as e:
+            pass
+        finally:
+            # Closing the socket and the file
+            sock.close()
+            self.receiving = False
+            self.file.close()
+
+    def wait(self):
+        """
+        Upon being called simply blocks the program flow until the full file has been received
+        Returns:
+        void
+        """
+        while self.receiving:
+            time.sleep(0.01)
+
+
+class SimpleFileSendServer(threading.Thread):
+    """
+    This object enables the download of a file from the server to a client.The clients ip does not have to be know to
+    the server, only the servers public host address and the used port have to be known to the client. This object has
+    to be created and running on the server side. If a "SimpleClientFileDownloader" is then created and started within
+    a client and connects to this server by addressing the correct port, a connection is being established. The client
+    will then send little ping messages, to which this server responds with chunks (~1KB) of the files data.
+
+    Attributes:
+        ip: The localhost address string
+        port: The integer port on which this server is listening
+        file: The byte reading open()-fileobject of the file to be sent
+        sending: The boolean value of whether or not the server is currently sending data
+
+    Args:
+        port: The port, on which the server is supposed to listen on
+        file_path: The string path to the file that is supposed to be sent
+    """
+    def __init__(self, port, file_path):
+        threading.Thread.__init__(self)
+        self.ip = "localhost"
+        self.port = port
+
+        self.file = open(file_path, "rb")
+
+        self.sending = False
+
+    def run(self):
+        # Creating a socket object and setting it up to act as a server on the local host ip and the given port,
+        # accepting only the first incoming connection request as this whole objects purpose is only to transfer one
+        # single file and for that only one connection/socket is needed
+        address_tuple = (self.ip, self.port)
+        sock = socket.socket()
+        sock.bind(address_tuple)
+        sock.listen(5)
+
+        connection, address = sock.accept()
+        self.sending = True
+
+        try:
+            while self.sending:
+                # first waiting to receive something from the client to know when it is ready and then reading and
+                # sending the next chunk of the file
+                connection.recv(1024)
+                data = self.file.read(1024)
+                if not data:
+                    self.sending = False
+                connection.send(data)
+        except Exception as e:
+            pass
+        finally:
+            # closing the file and the socket
+            self.sending = False
+            connection.close()
+            self.file.close()
+
+
+class PortManager(list):
+
+    def __init__(self, port_range):
+        list.__init__(self, port_range)
+
+    def acquire(self):
+        self.pop(0)
+
+    def release(self, port):
+        self.append(port)
