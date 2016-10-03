@@ -470,10 +470,33 @@ class ExerciseCreation(GridLayout):
 
 class MainScreen(Screen):
 
-    def __init__(self):
+    def __init__(self, screen_manager):
         Screen.__init__(self)
         self.menu = MainMenu()
         self.add_widget(self.menu)
+        self.name = "main"
+
+        # The screen manager widget, which is needed to change the screens
+        self.screen_manager = screen_manager
+
+        self.menu.button_exams.bind(on_press=self.switch_exams_screen)
+
+    def switch_exams_screen(self, *args):
+        """
+        Switches the current screen of the screen manager to display the exams menu
+        Args:
+            *args: -
+
+        Returns:
+        void
+        """
+        # The screen manager in the PiLearner project works with the "SlideTransition" transition, which has the
+        # property 'direction', that is a string defining into which direction the current screen slides off to make
+        # to make space for the new screen. In the PiLearn app the all transitions from a menu to a sub menu will go
+        # left and all transitions back up the hierarchy towards the main screen go right.
+        self.screen_manager.transition.direction = "left"
+        # Changing the screen to the 'exams' screen
+        self.screen_manager.current = "exams"
 
 
 class MainMenu(GridLayout):
@@ -557,6 +580,40 @@ class MainMenu(GridLayout):
         self.button_options.font_size = self.font_size
 
         self.label_header.font_size = self.font_size * 2
+
+
+class ExamsScreen(Screen):
+
+    def __init__(self, screen_manager):
+        Screen.__init__(self)
+        self.menu_exams = ExamsMenu()
+        self.add_widget(self.menu_exams)
+        self.name = "exams"
+
+        self.screen_manager = screen_manager
+
+        # Binding the press of the button, which is on top of the exams menu (which is also the label displaying the
+        # name of the sub menu currently in) to switch back to the main menu if pressed
+        self.menu_exams.button_header.bind(on_press=self.switch_main_menu)
+
+    def switch_main_menu(self, *args):
+        """
+        Switches the current screen of the screen manager to display the main screen again.
+        The callback method for the label button, which is on top of the  exams menu and displays which menu the screen
+        manager is currently in
+        Args:
+            *args: -
+
+        Returns:
+        void
+        """
+        # The screen manager in the PiLearner project works with the "SlideTransition" transition, which has the
+        # property 'direction', that is a string defining into which direction the current screen slides off to make
+        # to make space for the new screen. In the PiLearn app the all transitions from a menu to a sub menu will go
+        # left and all transitions back up the hierarchy towards the main screen go right.
+        self.screen_manager.transition.direction = "right"
+        # Switching the current scrren back to be the main screen
+        self.screen_manager.current = "main"
 
 
 class ExamsMenu(GridLayout):

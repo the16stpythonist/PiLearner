@@ -3,10 +3,11 @@ __version__ = "0.0.0"
 
 from kivy.app import App
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.screenmanager import ScreenManager
 import pisole.pisole as pisole
 from ui import ExerciseCreation
-from ui import MainMenu
-from ui import ExamsMenu
+from ui import MainMenu, MainScreen
+from ui import ExamsMenu, ExamsScreen
 
 
 class PiLearnerWidget(GridLayout):
@@ -14,13 +15,17 @@ class PiLearnerWidget(GridLayout):
     def __init__(self):
         super(PiLearnerWidget, self).__init__()
 
-        self.cols = 4
+        self.cols = 3
         self.rows = 1
         self.minimum_height = 480
         self.minimum_width = 1150
 
-        self.add_widget(ExamsMenu())
-        self.add_widget(MainMenu(16))
+        sm = ScreenManager()
+        s1 = MainScreen(sm)
+        s2 = ExamsScreen(sm)
+        sm.add_widget(s1)
+        sm.add_widget(s2)
+        self.add_widget(sm)
 
         self.add_widget(ExerciseCreation("Elektronik", "Halbleiterphysik"))
 
