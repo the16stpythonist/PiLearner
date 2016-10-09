@@ -1,9 +1,14 @@
 __author__ = "Jonas Teufel"
 __version__ = "0.0.0"
 
+from wand.image import Image
+from wand.color import Color
+
 import PiLearner.exercise as exercise
 import configparser
 import datetime
+import shutil
+import wand
 import time
 import os
 
@@ -63,7 +68,7 @@ LATEX_EXAM_EXERCISE_HEADER = r"""
 \newline \noindent """
 
 
-def create_exam(subject, subsubject, max_points):
+def create_exam(subject, subsubject, max_points, project_path=exercise.PROJECT_PATH):
     """
     A wrapper function to destill the process of the creation of an exam down to one function and removing the necessity
     to bundle this functionality within the Exam class where it would feel unintuitive and contra object-oriented.
@@ -79,11 +84,18 @@ def create_exam(subject, subsubject, max_points):
     exam = Exam(subject, subsubject, max_points=max_points)
     exam.create_content()
 
-    # generating the pdf
-    generate_pdf(exam)
+    # Generating the actual pdf file from the latex string within the given Exam object within the 'exams' folder
+    # of the given project folder
+    pdf_file_path = generate_pdf(exam, project_path)
+    # Setting the oath for the PNG file to be the same folder and name as the pdf file, by only replacing the PDF
+    # file extension with the PNG file extension
+    png_file_path = pdf_file_path.replace(".pdf", ".png")
 
-    # generating the session file
-    session_file_path = "{0}\\exams\\{1} - {2}.session".format(exercise.PROJECT_PATH, exam.subject, exam.subsubject)
+    # Generating the PNG file from the PDF file
+    png_from_pdf(pdf_file_path, png_file_path)
+
+    # Generating the session file
+    session_file_path = "{0}\\exams\\{1} - {2}.session".format(project_path, exam.subject, exam.subsubject)
     # creating the file and writing the content to it
     with open(session_file_path, mode="w", encoding="utf-8") as file:
         # writing the exercise names into the session file
@@ -91,23 +103,73 @@ def create_exam(subject, subsubject, max_points):
             file.write("{0}\n".format(exercise_object.name))
 
 
-def generate_pdf(exam_obj):
+# TODO: Make Unix/Linux compatible
+def generate_pdf(exam_obj, project_path):
     """
     When passed an exam_object this function will go on and create a TEX file from the content string of the exam and
     then convert the TEX file into a PDF file using PDFLATEX in a operating system command issued from within python
     :param exam_obj: (Exam) The exam, which to make the PDF file from
-    :return: (void)
+    Returns:
+    The absolute path to the PDF file
     """
     # creating a temporary .tex file with the whole content string in the exams folder of the project
-    tex_file_path = "{0}\\exams\\{1}.tex".format(exercise.PROJECT_PATH, exam_obj.subject)
+    exams_path = get_exams_path(project_path)
+    file_name = "{} - {}".format(exam_obj.subject, exam_obj.subsubject)
+    tex_file_path = "{}\\{}.tex".format(exams_path, file_name)
     # creating the file and writing the content to it
     with open(tex_file_path, mode="w", encoding="utf-8") as file:
         file.write(exam_obj.content)
-    # giving the order to create the pdf
-    os.system("pdflatex -interaction nonstopmode {0}".format(tex_file_path))
+
+    # Using the LaTeX installation on the given machine to actually convert the just written TEX file into the PDF file.
+    # More specifically the 'pdflatex' executable is being called with the nonstop parameter, so the program flow is not
+    # interrupted. The pdflatex command accepts any absolute path of the TEX file as input, but creates the resulting
+    # output files within the current working directory, changing the directory  with another command first
+    change_directory_command = 'cd "{}"'.format(exams_path)
+    latex_command = 'pdflatex --interaction nonstopmode "{}"'.format(tex_file_path)
+    command = "{} & {}".format(change_directory_command, latex_command)
+    os.system(command)
+    # Creating the path of the pdf file to return in the end
+    pdf_file_path = "{}\\{}.pdf".format(exams_path, file_name)
+
+    # The actual 'pdflatex' utility creates multiple other files aside from the pdf of the tex file. These include an
+    # AUX and a LOG file, that are irrelevant to the PDF and have to be deleted
+    aux_file_path = "{}\\{}.aux".format(exams_path, file_name)
+    log_file_path = "{}\\{}.log".format(exams_path, file_name)
+    os.remove(aux_file_path)
+    os.remove(log_file_path)
+
+    return pdf_file_path
 
 
-def get_session_path(subject, subsubject):
+def png_from_pdf(pdf_path, png_path):
+    """
+    Creates a PNG file at the given path from the PDF file at the given path
+    Args:
+        pdf_path: The string path of the PDF file for which the PNG is to be created
+        png_path: The string path of where to save the PNG
+
+    Returns:
+    void
+    """
+
+    # Opening the pdf file inside the context manager
+    with open(pdf_path, "rb") as pdf_file:
+        with Image(blob=pdf_file, resolution=200) as image:
+            pages = len(image.sequence)
+            # Creating a white background with the same height and width as the actual image, that was created from the
+            # pdf and then drawing the actual image onto the background.
+            # This is important, because on default, the actual image is in alpha channel and thus would have no
+            # real background, appearing transparent
+            with Image(width=image.width, height=image.height * pages, background=Color("white")) as background:
+                for index in range(pages):
+                    top = (image.height * index)
+                    if index != 0:
+                        top -= 300
+                    background.composite(image.sequence[index], top=top, left=0)
+                background.save(filename=png_path)
+
+
+def get_session_path(subject, subsubject, project_path=exercise.PROJECT_PATH):
     """
     returns the path of the session file of the given subject. This will only assemble a string and does not say, that
     the file actually exists
@@ -117,7 +179,7 @@ def get_session_path(subject, subsubject):
     """
     # assembling the path of the session file to the specified subject
     session_name = "{} - {}.session".format(subject, subsubject)
-    session_path = "{}\\exams\\{}".format(exercise.PROJECT_PATH, session_name)
+    session_path = "{}\\exams\\{}".format(project_path, session_name)
     return session_path
 
 
@@ -160,7 +222,7 @@ def get_session_content(subject="", subsubject="", sessionfile_path=""):
     return session_lines_list
 
 
-def get_session_path_list():
+def get_session_path_list(project_path=exercise.PROJECT_PATH):
     """
     Returns:
     A list containing the string paths to all the currently existing session files
@@ -169,7 +231,7 @@ def get_session_path_list():
     # files within that 'exams' folder, building the full file paths and checking for them actually being files and for
     # their file extensions.
     session_path_list = []
-    exams_path = get_exams_path()
+    exams_path = get_exams_path(project_path)
     file_name_list = os.listdir(exams_path)
     for file_name in file_name_list:
         file_path = os.path.join(exams_path, file_name)
@@ -300,13 +362,13 @@ def save_history_solved_exam(solved_exam):
         return False
 
 
-def get_exams_path():
+def get_exams_path(project_path):
     """
     Returns:
     The path to the 'exams' folder of the project, inside which the session files and the actual pdf exams are
     stored in
     """
-    exams_path = "{}\\exams".format(exercise.PROJECT_PATH)
+    exams_path = "{}\\exams".format(project_path)
     return exams_path
 
 
