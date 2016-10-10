@@ -84,29 +84,6 @@ def create_exam(console, subject, subsubject, max_points, dest_path=""):
     # theoretically the creation process is finished. Only cleaning up the left overs now
     console.print_info("Finished creation process")
     time.sleep(0.01)
-
-    # printing the path of the file
-    if os.path.exists("{0}\\{1}.pdf".format(exercise.PROJECT_PATH, subject)):
-        console.print_result("Exam succesfully generated in folder '{0}'".format(project_directory))
-
-    # removing the files, that were also created by the latex converter, but are useless for the user
-    os.remove("{0}\\{1}.aux".format(project_directory, subject))
-    os.remove("{0}\\{1}.log".format(project_directory, subject))
-
-    full_subject_name = ''.join([subject, " - ", subsubject])
-    # moving the file into the exams folder
-    new_path = "{0}\\exams\\{1}.pdf".format(exercise.PROJECT_PATH, full_subject_name)
-    shutil.move("{0}\\{1}.pdf".format(project_directory, subject),
-                new_path)
-    if os.path.exists(new_path):
-        console.print_result("Exam successfully moved to folder '{0}\\exams\\{1}.pdf'".format(exercise.PROJECT_PATH,
-                                                                                            full_subject_name))
-
-    # copying the exam file into the folder, that was additionally specified by the dest_path variable
-    if dest_path != "":
-        destination_path = dest_path + "\\{}.pdf".format(full_subject_name)
-        shutil.copy(new_path, destination_path)
-        console.print_result("Exam successfully copied to folder '{0}'".format(destination_path))
     return True
 
 

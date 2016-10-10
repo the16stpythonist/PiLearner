@@ -1,5 +1,6 @@
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
+from kivy.uix.image import Image
 from kivy.uix.textinput import TextInput
 from kivy.uix.codeinput import CodeInput
 from kivy.uix.treeview import TreeView
@@ -10,6 +11,7 @@ from kivy.properties import StringProperty
 from kivy.properties import ListProperty
 from kivy.properties import BooleanProperty
 from kivy.properties import NumericProperty
+from kivy.properties import ObjectProperty
 from kivy.uix.button import Button
 
 from kivy.clock import Clock
@@ -121,6 +123,174 @@ class LabeledTextInput(TextInput):
         """
         if self.text == "":
             self.text = self.label_text
+
+
+class LabeledValidityTextInput(LabeledTextInput):
+    """
+    An abstract base class of a text input for numeric values only. The class is based on the LabelTextInput and thus
+    offers the basic functionality, that the expected type of input can be displayed to the used as a string within
+    the input widget, that will disappear as soon as the widget is focused and reappear, when the the widget is being
+    unfocused again.
+    This is an abstract base class in a way, that it does not directly implement a functionality of checking the type
+    of the entered input for being numeric, but it implements the property boolean 'is_valid_input' and the
+    changing of the background color of the widget according to the state of this property (light red in case the
+    property is false/input invalid and light green if the property is True/valid input).
+
+    Notes:
+        - A class inheriting from this abstract base class does not have to implement the changing of the background
+        color, but only has to change the boolean state of the 'is_valid_input' property, which will trigger the
+        callback, that actually changes the color
+
+    Attributes:
+        color_list_invalid: This list contains the information for a red background color, that is 30% transparent and
+            should be used as the the background for the text input, when an invalid input is being entered
+        color_list_valid: This list contains the information for a green background color, that is 30% transparent and
+            should be used as the background color for the text input, when the entered input of a text input widget
+            is valid
+        is_valid_input: The boolean value of whether or not the currently entered input is valid or not
+    """
+    # When setting for example the background color for a widget in kivy the color property will be set by a list,
+    # consisting 4 of float values, from 0 to 1, the first value being the intensity of red in the expected color, the
+    # second value the intensity of green, the third value the intensity of blue (RGB format) and the fourth value
+    # being the alpha channel of the color, which is basically the opacity, which the color is supposed to have.
+
+    # This list contains the information for a red background color, that is 30% transparent and should be used as the
+    # the background for the text input, when an invalid input is being entered
+    color_list_invalid = ListProperty([1, 0.7, 0.7, 1])
+    # This list contains the information for a green background color, that is 30% transparent and should be used as
+    # the background color for the text input, when the entered input of a text input widget is valid
+    color_list_valid = ListProperty([0.7, 1, 0.7, 1])
+    # Indicates whether the currently entered input in the text input widget is valid (,meaning whether it is numeric
+    # or not)
+    is_valid_input = BooleanProperty(False)
+
+    def __init__(self, label_text="numeric"):
+        LabeledTextInput.__init__(self, label_text)
+
+    def on_is_valid_input(self, *args):
+        """
+        The callback method for the observer event in case the state of the boolean property that indicates the
+        validity of the entered input of the text input widget changes.
+        Upon a change in the boolean state of the property occurred, the method will check which state the property
+        is currently in. In case the property is False, indicating an invalid input within the widget, the background
+        of the widget will be changed to a light red, in case the property is True, indicating a valid input in the
+        widget, the background of the widget will be changed to a light green
+        Args:
+            *args: -
+
+        Returns:
+        void
+        """
+        # Upon a change of the valid input boolean property, checking into which state it actually changed and then
+        # changing the background color to a slight red in case the input is invalid and a slight green, in case the
+        # background color is valid
+        if self.is_valid_input:
+            self.background_color = self.color_list_valid
+        else:
+            self.background_color = self.color_list_invalid
+
+    def is_valid(self):
+        """
+        Returns:
+        The boolean value of whether or not the entered input is valid
+        """
+        return self.is_valid_input
+
+    def set_input_validity(self, boolean_value):
+        """
+        Changes the boolean property of whether or not the entered input inside the widgets input field is valid,
+        whatever the criteria of validity may be
+        Args:
+            boolean_value: The boolean value, which the is valid text input property is supposed to be set to
+
+        Returns:
+        void
+        """
+        self.is_valid_input = boolean_value
+
+    def set_input_valid(self):
+        """
+        Sets the property of whether the input is valid or not to be True
+        Returns:
+        void
+        """
+        self.set_input_validity(True)
+
+    def set_input_invalid(self):
+        """
+        Sets the boolean property of whether ot not the input is valid to False
+        Returns:
+        void
+        """
+        self.set_input_validity(False)
+
+
+class IntegerTextInput(LabeledValidityTextInput):
+    """
+    This class represents a TextInput widget, that is espacially designed for expecting the input of an integer value.
+    The class is based on the LabelTextInput and thus offers the basic functionality, that the expected type of input
+    can be displayed to the used as a string within the input widget, that will disappear as soon as the widget is
+    focused and reappear, when the the widget is being unfocused again.
+    The class implements a boolean property of whether or not the entered input is convertable to an integer or not.
+    If the input is invalid, the background color of the widget will be set to light red, if it is valid however the
+    background color is bing turned into a slight green.
+    """
+    def __init__(self, label_text="int"):
+        LabeledValidityTextInput.__init__(self, label_text)
+
+    def on_text(self, *args):
+        """
+        The callback method for the observer event in case the 'text' property of the widget changed.
+        Upon changing the text property, which is the the complete string of the entered input, it is attempted to
+        convert this string to integer type value. In case the conversion is possible setting the input to valid, but in
+        case the conversion raised an exception, the input will be set to invalid
+        Returns:
+        void
+        """
+        try:
+            # Trying to convert the the entered input, that is given, by the 'text' property into an integer type and
+            # setting the input of the input widget to True, which will indicate to the user by changing the background
+            # color of the widget to a light green automatically (call back of the validity
+            int(self.text)
+            self.set_input_valid()
+        except ValueError:
+            # In case the attempted conversion raised an exception, the input is being set as invalid, indicated by a
+            # light red background
+            self.set_input_invalid()
+
+
+class FloatTextInput(LabeledValidityTextInput):
+    """
+    This class represents a TextInput widget, that is especially designed for expecting the input of an float value.
+    The class is based on the LabelTextInput and thus offers the basic functionality, that the expected type of input
+    can be displayed to the used as a string within the input widget, that will disappear as soon as the widget is
+    focused and reappear, when the the widget is being unfocused again.
+    The class implements a boolean property of whether or not the entered input is convertable to a float or not.
+    If the input is invalid, the background color of the widget will be set to light red, if it is valid however the
+    background color is bing turned into a slight green.
+    """
+    def __init__(self, label_text="int"):
+        LabeledValidityTextInput.__init__(self, label_text)
+
+    def on_text(self, *args):
+        """
+        The callback method for the observer event in case the 'text' property of the widget changed.
+        Upon changing the text property, which is the the complete string of the entered input, it is attempted to
+        convert this string to float type value. In case the conversion is possible setting the input to valid, but in
+        case the conversion raised an exception, the input will be set to invalid
+        Returns:
+        void
+        """
+        try:
+            # Trying to convert the the entered input, that is given, by the 'text' property into an integer type and
+            # setting the input of the input widget to True, which will indicate to the user by changing the background
+            # color of the widget to a light green automatically (call back of the validity
+            float(self.text)
+            self.set_input_valid()
+        except ValueError:
+            # In case the attempted conversion raised an exception, the input is being set as invalid, indicated by a
+            # light red background
+            self.set_input_invalid()
 
 
 class ColoredButtonLabel(Button):
@@ -592,9 +762,18 @@ class ExamsScreen(Screen):
 
         self.screen_manager = screen_manager
 
+        # Creating the 'solve exam' screen, which is empty on default
+        self.screen_solve_exam = SolveExamScreen()
+        self.screen_manager.add_widget(self.screen_solve_exam)
+
         # Binding the press of the button, which is on top of the exams menu (which is also the label displaying the
         # name of the sub menu currently in) to switch back to the main menu if pressed
         self.menu_exams.button_header.bind(on_press=self.switch_main_menu)
+
+        # Binding the press of the 'solve' button on the lower end of the screen to the 'solve_exam' method, which
+        # loads the exam object according to the selected tree view node, creates a SolveExamMenu and sets this Menu
+        # to be the 'solve exam' screen of the screen manager and then changes to that screen.
+        self.menu_exams.button_solve.bind(on_press=self.solve_exam)
 
     def switch_main_menu(self, *args):
         """
@@ -615,6 +794,17 @@ class ExamsScreen(Screen):
         # Switching the current scrren back to be the main screen
         self.screen_manager.current = "main"
 
+    def solve_exam(self, *args):
+        # Getting the exam object from the currently selected tree view node
+        exam_object = self.menu_exams.get_selected_exam()
+
+        # Setting up the solve exam screen
+        self.screen_solve_exam.solve(exam_object)
+
+        # Using the screen manager to change the screen to the solve exam screen
+        self.screen_manager.transition.direction = "left"
+        self.screen_manager.current = "solve exam"
+
 
 class ExamsMenu(GridLayout):
 
@@ -623,7 +813,7 @@ class ExamsMenu(GridLayout):
     def __init__(self, font_size=15):
         GridLayout.__init__(self)
         self.cols = 1
-        self.rows = 4
+        self.rows = 3
         self.padding = 5
         self.spacing = 5
 
@@ -678,10 +868,6 @@ class ExamsMenu(GridLayout):
         self.button_create.text = "create"
         self.grid_layout_buttons.add_widget(self.button_create)
 
-        self.watch = SimpleStopwatch()
-        self.watch.size_hint_y = None
-        self.add_widget(self.watch)
-
         self.font_size = font_size
 
     def add_pending_exams_tree(self):
@@ -716,6 +902,30 @@ class ExamsMenu(GridLayout):
         pending_exams_nodes = self.tree_node_pending_exams.nodes
         for node in pending_exams_nodes:
             node.font_size = self.font_size - 2
+
+    def get_selected_node(self):
+        """
+        Returns:
+        The widget, that is currently selected within the tree view
+        """
+        return self.tree_view.get_selected_node()
+
+    def get_selected_exam(self):
+        """
+        Returns:
+        The Exam object, that was built from the session file to the selected tree view node
+        """
+        # The string property 'text' of the selected tree view label contains the session name of the exam in question.
+        # The session name is a string of the format '{subject} - {subsubject}', the subject and subsubject names can
+        # be calculated by splitting the string by the ' - ' substring. The subject and subsubject are then used to
+        # load the exam from the session.
+        selected_node = self.get_selected_node()
+        session_name = selected_node.text
+        session_name_split = session_name.split(" - ")
+        subject = session_name_split[0]
+        subsubject = session_name_split[1]
+        exam_object = exam.exam_from_session(subject=subject, subsubject=subsubject)
+        return exam_object
 
 
 class StopwatchBase(GridLayout):
@@ -759,6 +969,7 @@ class StopwatchBase(GridLayout):
     running = BooleanProperty(False)
 
     def __init__(self):
+        GridLayout.__init__(self)
         self.event = None
 
     def on_current_time(self, *args):
@@ -856,7 +1067,7 @@ class SimpleStopwatch(StopwatchBase):
     font_size = NumericProperty(0)
 
     def __init__(self, font_size=30):
-        GridLayout.__init__(self)
+        StopwatchBase.__init__(self)
         # The grid layout of this widget will consist of two rows, one row being for the descriptive labels, that show
         # which type of time unit is being tracked in the column they are in and the second row being for the labels,
         # that actually display the numbers of the time.
@@ -908,9 +1119,8 @@ class SimpleStopwatch(StopwatchBase):
         self.label_seconds.height = self.numbers_label_height
         self.add_widget(self.label_seconds)
 
-        self.start()
-
         self.font_size = font_size
+        self.on_size()
 
     def on_font_size(self, *args):
         """
@@ -951,7 +1161,27 @@ class SimpleStopwatch(StopwatchBase):
         Returns:
         void
         """
-        self.font_size = int(self.width / 4.5)
+        # Updating the font size of the widget. The ration of width by font size is supposed to be approx. 4.5
+        # If this calculated font size does not exceed the maximum size, which is at approx. 60% of the widget height,
+        # the calculated font size is being used as the actual font size.
+        # In case the max size is exceeded, the font size is being set as the max size and then, to maintain the widget
+        # integrity/ratios, the excess width is being substracted from the effective widget width by extending the left
+        # and right padding by half the value.
+        font_size = int(self.width / 4.5)
+        max_font_size = int(self.height * 0.6)
+        if font_size <= max_font_size:
+            self.font_size = font_size
+
+        else:
+            #
+            self.font_size = max_font_size
+            # The ratio of width to height is supposed to be 3(width) to 1(height). If the ratio is not given the
+            # padding left and right is being adjusted so that the effective ratio of the actual label widgets matches
+            # up to 3/1
+            ratio = self.width / self.height
+            excess_width = ratio * self.height - 300
+            padding = int(excess_width / 2)
+            self.padding = [padding, 5, padding, 5]
 
     def on_current_time(self, *args):
         """
@@ -975,6 +1205,299 @@ class SimpleStopwatch(StopwatchBase):
         self.label_hours.text = str(self.hours)
         self.label_minutes.text = str(self.minutes)
         self.label_seconds.text = str(self.seconds)
+
+
+class SolveExamScreen(Screen):
+
+    menu_solve_exam = ObjectProperty(Label())
+
+    def __init__(self):
+        # Initializing the super class
+        Screen.__init__(self)
+        self.name = "solve exam"
+        self.add_widget(self.menu_solve_exam)
+
+    def solve(self, exam_object):
+        self.remove_widget(self.menu_solve_exam)
+        self.menu_solve_exam = SolveExamMenu(exam_object)
+        self.add_widget(self.menu_solve_exam)
+
+
+class SolveExamMenu(GridLayout):
+
+    def __init__(self, exam_object):
+        # Initializing the super class
+        GridLayout.__init__(self)
+        self.cols = 1
+        self.rows = 2
+        self.padding = 5
+        self.spacing = 5
+
+        self.exam = exam_object
+        self.name = "{}-{}".format(self.exam.subject, self.exam.subsubject)
+
+        self.button_header = ColoredButtonLabel()
+        self.button_header.color_list = PILEARN_COLOR_LIST
+        self.button_header.text = self.name
+        self.button_header.size_hint_y = None
+        self.button_header.halign = "left"
+        self.button_header.height = 35
+        self.add_widget(self.button_header)
+
+        # The actual widget to solve the exam
+        self.solve_exam = SolveExam(self.exam)
+        self.add_widget(self.solve_exam)
+
+
+class ExercisePointsInput(GridLayout):
+    """
+    This class represents a widget, that allows the input of the amount of achieved points for a given exercise.
+    The widget base is a grid layout, with 1 row and 2 columns. A label being the first widget on the left, making up
+    about 70% of the widgets width and displaying the string of the specified exercise name. The second widget on the
+    left being an IntegerTextInput widget for entering the amount of achieved points. The input widget will indicate,
+    whether the input is valid for as the amount of points, by changing the background color to a light red in case the
+    input is invalid (string not convertible to int or the int value being bigger than the value of actual
+
+    Attributes:
+        font_size: The kivy NumericProperty for the font size of the widget and thus also the font size of the both
+            individual subwidgets
+
+    Args:
+        exercise_object: The Exercise object, the widget is supposed to represent
+        font_size: The integer value of the font size, the widgets are supposed to have
+    """
+    font_size = NumericProperty(0)
+
+    def __init__(self, exercise_object, font_size=12):
+        # Initializing the super class
+        GridLayout.__init__(self)
+        self.rows = 1
+        self.cols = 2
+        self.spacing = 5
+
+        # An instance of this object has to be created, by passing the exercise_object, which the widget is supposed
+        # to represent
+        self.exercise = exercise_object
+        self.exercise_name = self.exercise.name
+        self.max_points = self.exercise.max_points
+
+        # The label, displaying the name of the exercise to grade
+        self.label_exercise_name = Label()
+        self.label_exercise_name.text = self.exercise_name
+        self.label_exercise_name.bind(size=self.label_exercise_name.setter("text_size"))
+        self.label_exercise_name.size_hint_x = 0.7
+        self.label_exercise_name.halign = "left"
+        self.label_exercise_name.valign = "middle"
+        self.add_widget(self.label_exercise_name)
+
+        # The input widget for the points
+        self.integer_input_points = IntegerTextInput("points")
+        self.integer_input_points.size_hint_x = None
+        self.integer_input_points.bind(text=self.on_text)
+        self.add_widget(self.integer_input_points)
+
+        self.font_size = font_size
+
+    def on_text(self, *args):
+        """
+        The callback method, that is being bound to the obesrver event of the text property of the input widget.
+        The method first checks whether the entered input is an integer, by calling the actual callback method of the
+        input widget, which is an instance of the class 'IntegerTextInput' and updating the validity property of the
+        input widget accordingly. In case the input is indeed an integer type value, the method gies on and checks
+        whether or not the entered value for the points does exceed the maximum amount of points possible for the
+        exercise.
+        Args:
+            *args: -
+
+        Returns:
+        void
+        """
+        # Calling the 'on_text' of the super class, as that method is the first instance of checking the input validity,
+        # as it checks for the input bing an integer to begin with
+        self.integer_input_points.on_text()
+
+        # In case the entered input is indeed an integer, the text will be converted to this integer value. If this
+        # integer value is bigger than the maximum amount of points possible for the exercise though, the input widget
+        # will be set to have an invalid input anyways
+        if self.integer_input_points.is_valid():
+            point_value = int(self.integer_input_points.text)
+            if point_value > self.max_points or point_value < 0:
+                self.integer_input_points.set_input_invalid()
+
+    def on_font_size(self, *args):
+        """
+        The callback method for the observer event in case the font size of the overall widget is changed.
+        The method simply updates the font sizes of the individual widgets (The labvel with the exrecise name and the
+        input widget for the points) to be the font size, specified for the overall widget
+        Args:
+            *args: -
+
+        Returns:
+        void
+        """
+        # Updating the font size of the label with the name of the exercise to match the font size of the overall widget
+        self.label_exercise_name.font_size = self.font_size
+
+        # Updating the font size of the input widget for the points to match the font size of the overall widget
+        self.integer_input_points.font_size = self.font_size
+
+    def get_points(self):
+        """
+        Returns:
+        The integer value of the entered points in case the entered input of the input widget is actually valid and
+        returns None in case the input is invalid
+        """
+        if self.integer_input_points.is_valid():
+            return int(self.integer_input_points.text)
+        else:
+            return None
+
+
+class ExamPointsInput(GridLayout):
+    """
+    This class represents a widget, that enables the user input for the amount of reached points for a given exam
+    object. The widgets base is a grid layout, with vertically stacked ExercisePointsInput widgets for each of the
+    exercises, that are part of the exam.
+
+    Attributes:
+        font_size: The kivy NumericProperty for the font size of the widget and thus also the font size of every
+            individual sub widget
+        exercise_points_input_widgets: The kivy ListProperty for the list, containing references to all the individual
+            input widget objects, that are part of the main grid layout.
+        exam: The Exam object, to be represented
+        exercise_list: The ExerciseList object of the Exam object, being a container object for all the Exercise
+            objects, that are part of the exam.
+
+    Args:
+        exam_object: The Exam object, to be represented
+    """
+    # The font size of the overall widget, that will be passed on to the individual sub widgets
+    font_size = NumericProperty(0)
+    # This list will contain the all the ExercisePointsInput widgets, that are being created from the Exercise objects,
+    # that are part of the exam, represented by this widget
+    exercise_points_input_widgets = ListProperty([])
+
+    def __init__(self, exam_object, font_size=12):
+        # Initializing the super class
+        GridLayout.__init__(self)
+        self.cols = 1
+        self.padding = 5
+        self.spacing = 5
+
+        # An instance of this widget is being created by passing the Exam object of the exam, which the widget is meant
+        # to represent. The Exam object contains the main ExerciseList, which can be iterated through to get all
+        # Exercise objects, that are part of the Exam.
+        self.exam = exam_object
+        self.exercise_list = self.exam.exercise_list
+
+        # Setting the amount rows of the grid layout to match the amount of exercises in the exam aka the length of the
+        # exercise list fo the exam
+        self.rows = len(self.exercise_list)
+
+        # Iterating through the list opf Exercise object, that are part of the given exam object and creating a
+        # ExercisePointsInput widget for every one of them, adding them to the list attribute, through which they can
+        # be accessed later on before actually adding the widget to the main grid layout
+        for exercise_object in self.exercise_list:
+            exercise_points_input = ExercisePointsInput(exercise_object)
+            exercise_points_input.size_hint_y = None
+            exercise_points_input.height = 30
+            self.exercise_points_input_widgets.append(exercise_points_input)
+            self.add_widget(exercise_points_input)
+
+        self.font_size = font_size
+
+    def on_font_size(self, *args):
+        """
+        The callback method for the observer event in case the font size property of the widget was changed.
+        The method will update the font size of all the sub widgets to match the font size of the main widget
+        Args:
+            *args:
+
+        Returns:
+        void
+        """
+        # Upon the font size property of the main widget (grid layout) was changed, passing on that change to the sub
+        # to the sub widgets, by itering through the list of widgtes and upadating their font size
+        for exercise_points_input in self.exercise_points_input_widgets:
+            exercise_points_input.font_size = self.font_size
+
+    def is_valid(self):
+        """
+        Checks every single input widget for its input validity, in case only one of them is invalid makes the whole
+        main widget invalid
+        Returns:
+        whether or not all the input widgets within this main wigdets are valid or not
+        """
+        # First assuming all the inputs are valid and checking all the input widgets, but returning False in case one
+        # of the widgets turns out to have invalid input. In case the loop exits that would mean False wasnt already
+        # returned, so no input was invalid
+        for exercise_points_input in self.exercise_points_input_widgets:
+            if not exercise_points_input.is_valid():
+                return False
+        return True
+
+
+class SolveExam(GridLayout):
+
+    font_size = NumericProperty(0)
+
+    def __init__(self, exam_object, font_size=12):
+        # Initialising the super class
+        GridLayout.__init__(self)
+        self.cols = 1
+        self.rows = 4
+        self.padding = 5
+        self.spacing = 5
+
+        self.exam = exam_object
+
+        # The button on top of the widget will be used to open the PDF file of the exam in a separate reader app
+        self.button_open_exam = Button()
+        self.button_open_exam.text = "Open Exam PDF"
+        self.button_open_exam.size_hint_y = None
+        self.button_open_exam.height = 40
+        self.add_widget(self.button_open_exam)
+
+        # The ScrollView for the main exam points input widget
+        self.scroll_view_exercises = ScrollView()
+        self.exam_points_input = ExamPointsInput(self.exam)
+        # Important: To use a ScrollView widget, the size hint for the axis that is supposed to be scrollable has to be
+        # set to None and the minimum size of that axis (height for y, width for x) has to be bound to the setter of
+        # the actual size of that axis. Otherwise the scroll view wont work
+        self.exam_points_input.size_hint_y = None
+        self.exam_points_input.bind(minimum_height=self.exam_points_input.setter("height"))
+        self.scroll_view_exercises.add_widget(self.exam_points_input)
+        self.add_widget(self.scroll_view_exercises)
+
+        # The grid layout containing the three buttons to control the stop watch
+        self.grid_layout_buttons = GridLayout()
+        self.grid_layout_buttons.cols = 3
+        self.grid_layout_buttons.rows = 1
+        self.grid_layout_buttons.spacing = 5
+        self.grid_layout_buttons.size_hint_y = None
+        self.grid_layout_buttons.height = 35
+
+        self.button_start = Button()
+        self.button_start.text = "start"
+        self.grid_layout_buttons.add_widget(self.button_start)
+
+        self.button_pause = Button()
+        self.button_pause.text = "pause"
+        self.grid_layout_buttons.add_widget(self.button_pause)
+
+        self.button_finish = Button()
+        self.button_finish.text = "finish"
+        self.grid_layout_buttons.add_widget(self.button_finish)
+
+        self.add_widget(self.grid_layout_buttons)
+
+        # The Stopwatch widget to meassure the time, the exam took.
+        self.stop_watch = SimpleStopwatch()
+        self.stop_watch.size_hint_y = None
+        self.stop_watch.height = 90
+        self.add_widget(self.stop_watch)
+
+
 
 
 

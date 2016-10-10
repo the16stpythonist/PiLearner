@@ -25,6 +25,7 @@ class PiLearnerWidget(GridLayout):
         s2 = ExamsScreen(sm)
         sm.add_widget(s1)
         sm.add_widget(s2)
+        sm.current = "main"
         self.add_widget(sm)
 
         self.add_widget(ExerciseCreation("Elektronik", "Halbleiterphysik"))
